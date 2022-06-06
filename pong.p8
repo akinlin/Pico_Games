@@ -4,7 +4,6 @@ __lua__
 
 SCREEN_WIDTH = 128
 SCREEN_HEIGHT = 128
-something = 4
 
 --[[ INIT ]]
 function _init()
@@ -13,23 +12,25 @@ end
 
 function init_board()
     walls = {}
-    top = create_wall()
+    local top = create_wall(0,0,SCREEN_WIDTH,3)
     add(walls, top)
 
-    bottom = create_wall()
-    bottom.y = SCREEN_HEIGHT-bottom.height
+    local bottom = create_wall(0,SCREEN_HEIGHT-3,SCREEN_WIDTH,3)
     add(walls, bottom)
+
+    local net = create_wall((128/2)-(3/2),0,3,128)
+    add(walls, net)
 end
 
-function create_wall()
+function create_wall(xpos,ypos,w,h)
     wall = {
-        width = SCREEN_WIDTH,
-        height = 5,
-        x = 0,
-        y = 0,
+        width = w,
+        height = h,
+        x = xpos,
+        y = ypos,
         color = 7,
-        drawf = function()
-                    rectfill(wall.x,wall.y,wall.width,wall.height,wall.color)
+        drawf = function(a)
+                    rectfill(a.x,a.y,a.x+a.width,a.y+a.height,a.color)
                 end
     }
 
@@ -49,10 +50,9 @@ end
 
 function draw_board()
     -- top/bot bars
-    a=walls[1]
-    a.drawf()
-    --rectfill(top.x,top.y,top.width,top.height,top.color)
-    --rectfill(bot_bar_x,bot_bar_y,bot_bar_width,bot_bar_y+bot_bar_height,bar_color)
+    for x=1,#walls do 
+        walls[x].drawf(walls[x])
+    end
 end
 
 __gfx__
