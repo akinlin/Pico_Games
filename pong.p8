@@ -4,6 +4,7 @@ __lua__
 
 SCREEN_WIDTH = 128
 SCREEN_HEIGHT = 128
+something = 4
 
 --[[ INIT ]]
 function _init()
