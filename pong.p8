@@ -1,0 +1,63 @@
+pico-8 cartridge // http://www.pico-8.com
+version 32
+__lua__
+
+SCREEN_WIDTH = 128
+SCREEN_HEIGHT = 128
+
+--[[ INIT ]]
+function _init()
+    init_board()
+end
+
+function init_board()
+    walls = {}
+    top = create_wall()
+    add(walls, top)
+
+    bottom = create_wall()
+    bottom.y = SCREEN_HEIGHT-bottom.height
+    add(walls, bottom)
+end
+
+function create_wall()
+    wall = {
+        width = SCREEN_WIDTH,
+        height = 5,
+        x = 0,
+        y = 0,
+        color = 7,
+        drawf = function()
+                    rectfill(wall.x,wall.y,wall.width,wall.height,wall.color)
+                end
+    }
+
+    return wall
+end
+
+--[[ UPDATE ]]
+function _update()
+end
+
+--[[ DRAW ]]
+function _draw()
+	cls(0)
+
+    draw_board()
+end
+
+function draw_board()
+    -- top/bot bars
+    a=walls[1]
+    a.drawf()
+    --rectfill(top.x,top.y,top.width,top.height,top.color)
+    --rectfill(bot_bar_x,bot_bar_y,bot_bar_width,bot_bar_y+bot_bar_height,bar_color)
+end
+
+__gfx__
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
