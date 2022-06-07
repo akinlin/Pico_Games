@@ -8,6 +8,7 @@ SCREEN_HEIGHT = 128
 --[[ INIT ]]
 function _init()
     init_board()
+    init_hud()
 end
 
 function init_board()
@@ -18,8 +19,36 @@ function init_board()
     local bottom = create_wall(0,SCREEN_HEIGHT-3,SCREEN_WIDTH,3)
     add(walls, bottom)
 
-    local net = create_wall((128/2)-(3/2),0,3,128)
-    add(walls, net)
+    net = {
+        block_width = 1,
+        block_height = 1,
+        block_space = 3,
+        x = 64-.5,
+        y = 0,
+        color = 7,
+        drawnet = function()
+            ypos = net.y
+            while (ypos < 128) do
+                rectfill(net.x,ypos,net.x+net.block_width,ypos+net.block_height,net.color)
+                ypos += net.block_height + net.block_space
+            end
+        end
+    }
+end
+
+function init_hud()
+    hud = {
+        -- p2 is human player
+        p1_score = 0,
+        p1_x = 55,
+        p1_y = 7,
+        p1_color = 7,
+
+        p2_score = 0,
+        p2_x = 70,
+        p2_y = 7,
+        p2_color = 7
+    }
 end
 
 function create_wall(xpos,ypos,w,h)
@@ -53,6 +82,13 @@ function draw_board()
     for x=1,#walls do 
         walls[x].drawf(walls[x])
     end
+
+    -- net
+    net.drawnet()
+
+    -- hud
+    print(hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
+    print(hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
 end
 
 __gfx__
