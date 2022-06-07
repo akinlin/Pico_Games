@@ -5,11 +5,23 @@ __lua__
 SCREEN_WIDTH = 128
 SCREEN_HEIGHT = 128
 
+-- [[ HELPER FUNCTIONS ]]
+function coin_flip()
+    if rnd(2) > 1 then
+        return 1
+    end
+    return -1
+end
+
 --[[ INIT ]]
 function _init()
     init_board()
     init_hud()
     init_players()
+    init_ball()
+
+    timelast = time()
+    dt = 0
 end
 
 function init_board()
@@ -73,6 +85,26 @@ function init_players()
     add(walls, player2)
 end
 
+function init_ball()
+    local rad = .5
+    local nx = rad
+    local ny = 3 + rad
+    local xx = SCREEN_WIDTH - rad
+    local xy = SCREEN_HEIGHT - 3 - rad
+    ball = {
+        radius = rad,
+        color = 9,
+        minx = nx,
+        miny = ny,
+        maxx = xx,
+        maxy = xy,
+        x = rnd(xx),
+        y = rnd(xy),
+        dx = (xx - nx) / (flr(rnd(10)+1) * coin_flip()),
+        dy = (xy - ny) / (flr(rnd(10)+1) * coin_flip())
+    }
+end
+
 function create_wall(xpos,ypos,w,h)
     wall = {
         width = w,
@@ -90,6 +122,11 @@ end
 
 --[[ UPDATE ]]
 function _update()
+    dt = time() - timelast
+    timelast = time()
+
+    update_ball()
+
     -- test score changes
     if time() - hud.test_p1_timedx > hud.test_p1_resettime then
         hud.p1_score = flr(rnd(9))
@@ -107,8 +144,29 @@ function _update()
     test_update_paddle(player2)
 end
 
+function update_ball()
+    ball.x += (ball.dx * dt)
+    ball.y += (ball.dy * dt)
+
+    if ball.dx > 0 and ball.x > ball.maxx then
+        ball.x = ball.maxx
+        ball.dx = -ball.dx
+    elseif ball.dx < 0 and ball.x < ball.minx then
+        ball.x = ball.minx
+        ball.dx = -ball.dx
+    end
+
+    if ball.dy > 0 and ball.y > ball.maxy then
+        ball.y = ball.maxy
+        ball.dy = -ball.dy
+    elseif ball.dy < 0 and ball.y < ball.miny then
+        ball.y = ball.miny
+        ball.dy = -ball.dy
+    end
+end
+
 function test_update_paddle(a)
-    a.y += (.5*a.dir)
+    a.y += (1.5*a.dir)
     if a.y > 128 - a.height or a.y < 0 then
         a.dir *= -1
     end
@@ -121,6 +179,10 @@ function _draw()
 	cls(0)
 
     draw_board()
+    draw_ball()
+
+    print(ball.dx)
+    print(ball.dy)
 end
 
 function draw_board()
@@ -135,6 +197,10 @@ function draw_board()
     -- hud
     print("\^p" .. hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
     print("\^p" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
+end
+
+function draw_ball()
+    circfill(ball.x, ball.y, ball.radius, ball.color)
 end
 
 __gfx__
