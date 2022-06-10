@@ -5,6 +5,14 @@ __lua__
 SCREEN_WIDTH = 128
 SCREEN_HEIGHT = 128
 
+-- GAME STATES
+GS_UNINITIALIZED = 0
+GS_MENU = 1
+GS_GAME = 2
+GS_GAMEOVER = 3
+
+GAME_STATE = GS_UNINITIALIZED
+
 -- [[ HELPER FUNCTIONS ]]
 function coin_flip()
     if rnd(2) > 1 then
@@ -22,6 +30,8 @@ function _init()
 
     timelast = time()
     dt = 0
+
+    GAME_STATE = GS_MENU
 end
 
 function init_board()
@@ -122,6 +132,24 @@ end
 
 --[[ UPDATE ]]
 function _update()
+    if GAME_STATE == GS_MENU then
+        update_menu_state()
+    elseif GAME_STATE == GS_GAME then
+        update_game_state()
+    elseif GAME_STATE == GS_GAMEOVER then
+        update_gameover_state()
+    end
+end
+
+function update_menu_state()
+    if btnp(❎) then
+        GAME_STATE = GS_GAME
+    end
+end
+
+function update_game_state()
+    handle_game_input()
+
     dt = time() - timelast
     timelast = time()
 
@@ -142,6 +170,18 @@ function _update()
     -- test paddle movement
     test_update_paddle(player1)
     test_update_paddle(player2)
+end
+
+function handle_game_input()
+    if btnp(❎) then
+        GAME_STATE = GS_GAMEOVER
+    end
+end
+
+function update_gameover_state()
+    if btnp(❎) then
+        GAME_STATE = GS_GAME
+    end
 end
 
 function update_ball()
@@ -179,10 +219,14 @@ function _draw()
 	cls(0)
 
     draw_board()
-    draw_ball()
 
-    print(ball.dx)
-    print(ball.dy)
+    if (GAME_STATE == GS_GAME) then
+        draw_ball()
+    elseif (GAME_STATE == GS_MENU) then
+        print("press ❎ to start",32,64,7)
+    elseif (GAME_STATE == GS_GAMEOVER) then
+        print("game over",45,64,7)
+    end
 end
 
 function draw_board()
@@ -192,7 +236,9 @@ function draw_board()
     end
 
     -- net
-    net.drawnet()
+    if (GAME_STATE == GS_GAME) then
+        net.drawnet()
+    end
 
     -- hud
     print("\^p" .. hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
