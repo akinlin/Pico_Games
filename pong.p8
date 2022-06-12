@@ -175,13 +175,33 @@ function update_game_state()
 
     -- test paddle movement
     test_update_paddle(player1)
-    test_update_paddle(player2)
+    --test_update_paddle(player2)
 end
 
 function handle_game_input()
     if btnp(❎) then
         GAME_STATE = GS_GAMEOVER
     end
+
+     inputdx = 0
+    if (btn(⬇️)) then
+        if (player2.y < SCREEN_HEIGHT - player2.height - 3) then
+            player2.dir = 1
+            inputdx = 1.5
+        else
+            player2.y = SCREEN_HEIGHT - player2.height - 3
+        end
+    end
+
+    if (btn(⬆️)) then
+        if (player2.y > 3) then
+            player2.dir = -1
+            inputdx = 1.5
+        else
+            player2.y = 3
+        end
+    end
+    player2.y += (inputdx*player2.dir)
 end
 
 function update_gameover_state()
@@ -341,12 +361,12 @@ function _draw()
     elseif (GAME_STATE == GS_MENU) then
         print("press ❎ to start",32,64,7)
     elseif (GAME_STATE == GS_GAMEOVER) then
-        print("game over",45,64,7)
+        if (hud.p2_score > hud.p1_score) then
+            print("you win!!",45,64,7)
+        else
+            print("you lose!!",45,64,7)
+        end
     end
-
-    print(ball.dx)
-    print(ball.dy)
-    print(lasthit)
 end
 
 function draw_board()
