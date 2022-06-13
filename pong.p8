@@ -13,6 +13,8 @@ GS_GAMEOVER = 3
 
 GAME_STATE = GS_UNINITIALIZED
 
+SCORE_TO_WIN = 11
+
 -- [[ HELPER FUNCTIONS ]]
 function coin_flip()
     if rnd(2) > 1 then
@@ -36,9 +38,6 @@ function reset_game()
     timelast = time()
     dt = 0
 
-    intercept_line_a = {x1=0,y1=0,x2=0,y2=0}
-    intercept_line_b = {x1=0,y1=0,x2=0,y2=0}
-
     GAME_STATE = GS_MENU
 end
 
@@ -50,15 +49,10 @@ function init_board()
     local bottom = create_wall(0,SCREEN_HEIGHT-3,SCREEN_WIDTH,3)
     add(walls, bottom)
 
-    -- test left, right walls
-    --local left = create_wall(0,3,3,SCREEN_HEIGHT-3)
-    --add(walls, left)
+    init_net()
+end
 
-    --local right = create_wall(SCREEN_WIDTH-3,3,SCREEN_WIDTH,SCREEN_HEIGHT-3)
-    --add(walls, right)
-    -- end test
-
-    -- set up net
+function init_net()
     net = {
         block_width = 1,
         block_height = 1,
@@ -79,13 +73,13 @@ end
 function init_hud()
     hud = {
         p1_score = 0,
-        p1_x = 55,
-        p1_y = 7,
+        p1_x = 25,
+        p1_y = 10,
         p1_color = 7,
         -- p2 is human player
         p2_score = 0,
-        p2_x = 68,
-        p2_y = 7,
+        p2_x = 95,
+        p2_y = 10,
         p2_color = 7,
     }
 end
@@ -106,8 +100,6 @@ function init_players()
     predictwall = create_wall(player1.x,-100,player1.width,SCREEN_HEIGHT+200)
     predictwall.collisiontextboxcolor = 10
     predictwall.drawf = function(a) rect(a.x,a.y,a.x+a.width,a.y+a.height,1) end
-    --predictwall.collsionpt = {x=15,y=30,d="right"}
-    --add(walls, predictwall)
 
     -- player 2 is always a human player
     player2 = create_wall(SCREEN_WIDTH-paddle_width-4,paddle_starting_y,paddle_width,paddle_height)
@@ -133,7 +125,7 @@ function init_ball()
         miny = ny,
         maxx = xx,
         maxy = xy,
-        x = 64,--rnd(xx),
+        x = 64,
         y = rnd(xy),
         dx = (xx - nx) / (flr(rnd(7)+1) * coin_flip()),
         dy = (xy - ny) / (flr(rnd(7)+1) * coin_flip()),
@@ -195,6 +187,7 @@ function create_wall(xpos,ypos,w,h)
         collsion = true,
         collsionpt = nil,
         collisiontextboxcolor = 8,
+        collision_debug_draw = false,
         drawf = function(a)
                     rectfill(a.x,a.y,a.x+a.width,a.y+a.height,a.color)
                 end
@@ -231,22 +224,15 @@ function update_game_state()
         update_ball(dt)
     else
         if (ball.dx > 0) then hud.p1_score += 1 else hud.p2_score += 1 end
-        if (hud.p1_score == 9) or (hud.p2_score == 9) then GAME_STATE = GS_GAMEOVER end
+        if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then GAME_STATE = GS_GAMEOVER end
         init_ball()
     end
 
-    -- test paddle movement
-    --test_update_paddle(player1)
-    --test_update_paddle(player2)
     run_ai(dt, ball)
 end
 
 function handle_game_input()
-    if btnp(❎) then
-        GAME_STATE = GS_GAMEOVER
-    end
-
-     inputdx = 0
+    local inputdx = 0
     if (btn(⬇️)) then
         if (player2.y < SCREEN_HEIGHT - player2.height - 3) then
             player2.dir = 1
@@ -327,7 +313,6 @@ function update_ball(dt)
     end
 
     if pt then
-        lasthit = pt.d
         if (pt.d == 'left' or pt.d == 'right') then
             pos.x = pt.x;
             pos.dx = -pos.dx;
@@ -337,22 +322,33 @@ function update_ball(dt)
         end
     end
 
---[[
     -- add/remove spin based on paddle direction
-    if (paddle.up) then
-        local delta
-        if (pos.dy < 0) then delta = .5 delta = 1.5 end
-        pos.dy = pos.dy * delta
-    elseif (paddle.down) then
-        local delta
-        if (pos.dy > 0) then delta = .5 delta = 1.5 end
-        pos.dy = pos.dy * delta
-    end]]
+    if (player1.collsionpt) or (player2.collsionpt) then
+        if (player1.collsionpt) then
+            apply_spin(player1, pos)
+            player1.collsionpt = nil
+        else
+            apply_spin(player2, pos)
+            player2.collsionpt = nil
+        end
+    end
 
     ball.x = pos.x
     ball.y = pos.y
     ball.dx = pos.dx
     ball.dy = pos.dy
+end
+
+function apply_spin(collision_wall, pos)
+    if (collision_wall.dir == -1) then
+        local delta
+        if (pos.dy < 0) then delta = .5 else delta = 1.5 end
+        pos.dy = pos.dy * delta
+    elseif (collision_wall.dir == 1) then
+        local delta
+        if (pos.dy > 0) then delta = .5 else delta = 1.5 end
+        pos.dy = pos.dy * delta
+    end
 end
 
 function ball_intercept(ball, paddle, nx, ny)
@@ -509,24 +505,16 @@ function _draw()
             print("you lose!!",45,64,7)
         end
     end
+
+    -- debug rendering
+    --draw_debug()
 end
 
 function draw_board()
-    -- top/bot bars
+    -- draw walls
     for x=1,#walls do 
         walls[x].drawf(walls[x])
-        --[[ debug collsion box drawing
-        if (walls[x].collsionpt) then
-            rect(walls[x].collsionpt.x,walls[x].collsionpt.y,walls[x].collsionpt.x+2,walls[x].collsionpt.y+2,walls[x].collisiontextboxcolor)
-        end]]
     end
-    --[[ debug prediction collision box drawing
-    if (predictwall.collsionpt) then
-        rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
-    end
-    if (player1.prediction) then
-        rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
-    end]]
 
     -- net
     if (GAME_STATE == GS_GAME) then
@@ -540,6 +528,25 @@ end
 
 function draw_ball()
     circfill(ball.x, ball.y, ball.radius, ball.color)
+end
+
+function draw_debug()
+    -- draw collsion box on wall
+    for x=1,#walls do 
+        if (walls[x].collision_debug_draw) then 
+            if (walls[x].collsionpt) then
+                rect(walls[x].collsionpt.x,walls[x].collsionpt.y,walls[x].collsionpt.x+2,walls[x].collsionpt.y+2,walls[x].collisiontextboxcolor)
+            end
+        end
+    end
+
+    -- debug prediction collision box drawing
+    if (predictwall.collsionpt) then
+        rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
+    end
+    if (player1.prediction) then
+        rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
+    end
 end
 
 __gfx__
