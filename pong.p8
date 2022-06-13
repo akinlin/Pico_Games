@@ -188,6 +188,7 @@ function create_wall(xpos,ypos,w,h)
         collsion = true,
         collsionpt = nil,
         collisiontextboxcolor = 8,
+        collision_debug_draw = false,
         drawf = function(a)
                     rectfill(a.x,a.y,a.x+a.width,a.y+a.height,a.color)
                 end
@@ -494,24 +495,16 @@ function _draw()
             print("you lose!!",45,64,7)
         end
     end
+
+    -- debug rendering
+    --draw_debug()
 end
 
 function draw_board()
-    -- top/bot bars
+    -- draw walls
     for x=1,#walls do 
         walls[x].drawf(walls[x])
-        --[[ debug collsion box drawing
-        if (walls[x].collsionpt) then
-            rect(walls[x].collsionpt.x,walls[x].collsionpt.y,walls[x].collsionpt.x+2,walls[x].collsionpt.y+2,walls[x].collisiontextboxcolor)
-        end]]
     end
-    --[[ debug prediction collision box drawing
-    if (predictwall.collsionpt) then
-        rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
-    end
-    if (player1.prediction) then
-        rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
-    end]]
 
     -- net
     if (GAME_STATE == GS_GAME) then
@@ -525,6 +518,25 @@ end
 
 function draw_ball()
     circfill(ball.x, ball.y, ball.radius, ball.color)
+end
+
+function draw_debug()
+    -- draw collsion box on wall
+    for x=1,#walls do 
+        if (walls[x].collision_debug_draw) then 
+            if (walls[x].collsionpt) then
+                rect(walls[x].collsionpt.x,walls[x].collsionpt.y,walls[x].collsionpt.x+2,walls[x].collsionpt.y+2,walls[x].collisiontextboxcolor)
+            end
+        end
+    end
+
+    -- debug prediction collision box drawing
+    if (predictwall.collsionpt) then
+        rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
+    end
+    if (player1.prediction) then
+        rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
+    end
 end
 
 __gfx__
