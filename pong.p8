@@ -31,9 +31,13 @@ function reset_game()
     init_hud()
     init_players()
     init_ball()
+    init_ai()
 
     timelast = time()
     dt = 0
+
+    intercept_line_a = {x1=0,y1=0,x2=0,y2=0}
+    intercept_line_b = {x1=0,y1=0,x2=0,y2=0}
 
     GAME_STATE = GS_MENU
 end
@@ -47,13 +51,14 @@ function init_board()
     add(walls, bottom)
 
     -- test left, right walls
-    local left = create_wall(0,3,3,SCREEN_HEIGHT-3)
+    --local left = create_wall(0,3,3,SCREEN_HEIGHT-3)
     --add(walls, left)
 
-    local right = create_wall(SCREEN_WIDTH-3,3,SCREEN_WIDTH,SCREEN_HEIGHT-3)
+    --local right = create_wall(SCREEN_WIDTH-3,3,SCREEN_WIDTH,SCREEN_HEIGHT-3)
     --add(walls, right)
     -- end test
 
+    -- set up net
     net = {
         block_width = 1,
         block_height = 1,
@@ -90,12 +95,22 @@ function init_players()
     local paddle_width = 2
     local paddle_height = 16
     local paddle_starting_y = (SCREEN_HEIGHT/2)-(paddle_height/2)
-    player1 = create_wall(20,paddle_starting_y,paddle_width,paddle_height)
+    player1 = create_wall(4,paddle_starting_y,paddle_width,paddle_height)
     player1.dir = 1
+    -- in a 1 player game player1 is ai, add prediction member
+    player1.prediction = nil
+    player1.level = 8
+    player1.collisiontextboxcolor = 14
     add(walls, player1)
+    -- test wall for ai prediction
+    predictwall = create_wall(player1.x,-100,player1.width,SCREEN_HEIGHT+200)
+    predictwall.collisiontextboxcolor = 10
+    predictwall.drawf = function(a) rect(a.x,a.y,a.x+a.width,a.y+a.height,1) end
+    --predictwall.collsionpt = {x=15,y=30,d="right"}
+    --add(walls, predictwall)
 
-    -- player 2 is the human player
-    player2 = create_wall(SCREEN_WIDTH-paddle_width-20,paddle_starting_y,paddle_width,paddle_height)
+    -- player 2 is always a human player
+    player2 = create_wall(SCREEN_WIDTH-paddle_width-4,paddle_starting_y,paddle_width,paddle_height)
     player2.dir = 1
     add(walls, player2)
 end
@@ -118,12 +133,56 @@ function init_ball()
         miny = ny,
         maxx = xx,
         maxy = xy,
-        x = rnd(xx),
+        x = 64,--rnd(xx),
         y = rnd(xy),
-        dx = (xx - nx) / (flr(rnd(10)+1) * coin_flip()),
-        dy = (xy - ny) / (flr(rnd(10)+1) * coin_flip()),
+        dx = (xx - nx) / (flr(rnd(7)+1) * coin_flip()),
+        dy = (xy - ny) / (flr(rnd(7)+1) * coin_flip()),
         accel = acc
     }
+end
+
+function init_ai()
+    AILevels = {}
+    create_aitype(0.2, 40) -- 1: ai is losing by 8
+    create_aitype(0.3, 50) -- 2: ai is losing by 7
+    create_aitype(0.4, 60) -- 3: ai is losing by 6
+    create_aitype(0.5, 70) -- 4: ai is losing by 5
+    create_aitype(0.6, 80) -- 5: ai is losing by 4
+    create_aitype(0.7, 90) -- 6:ai is losing by 3
+    create_aitype(0.8, 100) -- 7: ai is losing by 2
+    create_aitype(0.9, 110) -- 8: ai is losing by 1 
+    create_aitype(1.0, 120) -- 9: tie
+    create_aitype(1.1, 130) -- 10: ai is winning by 1
+    create_aitype(1.2, 140) -- 11: ai is winning by 2
+    create_aitype(1.3, 150) -- 12: ai is winning by 3
+    create_aitype(1.4, 160) -- 13: ai is winning by 4
+    create_aitype(1.5, 170) -- 14: ai is winning by 5
+    create_aitype(1.6, 180) -- 15: ai is winning by 6
+    create_aitype(1.7, 190) -- 16: ai is winning by 7
+    create_aitype(1.8, 200) -- 17: ai is winning by 8
+end
+
+function create_aitype(reaction, error)
+    a = {
+        aiReaction = reaction,
+        aiError = error
+    }
+    add(AILevels, a)
+    return a
+end
+
+function create_prediction(s,dx,r,ex,ey,x,y,d)
+    p = {
+        since=s,
+        dx=dx,
+        radius=r,
+        exactx=ex,
+        exacty=ey,
+        x=x,
+        y=y,
+        d=d
+    }
+    return p
 end
 
 function create_wall(xpos,ypos,w,h)
@@ -133,6 +192,9 @@ function create_wall(xpos,ypos,w,h)
         x = xpos,
         y = ypos,
         color = 7,
+        collsion = true,
+        collsionpt = nil,
+        collisiontextboxcolor = 8,
         drawf = function(a)
                     rectfill(a.x,a.y,a.x+a.width,a.y+a.height,a.color)
                 end
@@ -174,8 +236,9 @@ function update_game_state()
     end
 
     -- test paddle movement
-    test_update_paddle(player1)
+    --test_update_paddle(player1)
     --test_update_paddle(player2)
+    run_ai(dt, ball)
 end
 
 function handle_game_input()
@@ -252,10 +315,15 @@ function update_ball(dt)
 
     -- loop all walls until a collsion is detected
     local x = 1
-    local pt = nil --ball_intercept(ball, paddle, pos.nx, pos.ny)
+    local pt = nil
     while (pt == nil) and (x <= #walls) do
-       pt = ball_intercept(ball, walls[x], pos.nx, pos.ny)
-       x += 1
+        if (walls[x].collsion) then
+            pt = ball_intercept(ball, walls[x], pos.nx, pos.ny)
+            if (pt) then
+                walls[x].collsionpt = {x=pt.x,y=pt.y,d=pt.d}
+            end
+        end
+        x += 1
     end
 
     if pt then
@@ -338,7 +406,7 @@ function intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
             end
         end
     end
-    return nil;
+    return nil
 end
 
 function test_update_paddle(a)
@@ -348,6 +416,80 @@ function test_update_paddle(a)
     end
 
     if flr(rnd(100)) == 5 then a.dir *= -1 end
+end
+
+function run_ai(dt, ball)
+    -- check if the ball is coming or going
+    if (((ball.x < player1.x) and (ball.dx < 0)) or
+        ((ball.x > player1.x+player1.width) and (ball.dx > 0))) then
+        player1.dir = 0
+        return
+    end
+
+    -- if coming predict the intersection point
+    predict(ball, dt);
+
+    if (player1.prediction) then
+        if (player1.prediction.y < (player1.y + player1.height/2 - 5)) then
+            player1.dir = -1
+        elseif (player1.prediction.y > ((player1.y+player1.height) - player1.height/2 + 5)) then
+            player1.dir = 1
+        else
+            player1.dir = 0
+        end
+    end
+    player1.y += (1.5*player1.dir)
+    if (player1.y < 3) then
+        player1.y = 3
+    end
+    if (player1.y > SCREEN_HEIGHT - player1.height - 3) then
+        player1.y = SCREEN_HEIGHT - player1.height - 3
+    end
+end
+
+function predict(ball, dt)
+    -- only re-predict if the ball changed direction, or its been some amount of time since last prediction
+    if (player1.prediction) then
+        if ((player1.prediction.dx * ball.dx) > 0) and
+            ((player1.prediction.dy * ball.dy) > 0) and
+            (player1.prediction.since < AILevels[player1.level].aiReaction) then
+                player1.prediction.since += dt
+                return
+        end
+    end
+
+    local pt = ball_intercept(ball, predictwall, ball.dx * 2, ball.dy * 2)
+
+    if (pt) then
+        predictwall.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
+        local t = 3 + ball.radius
+        local b = SCREEN_HEIGHT - 3 - ball.radius
+
+        while ((pt.y < t) or (pt.y > b)) do
+            if (pt.y < t) then
+                pt.y = t + (t - pt.y)
+            elseif (pt.y > b) then
+                pt.y = t + (b - t) - (pt.y - b);
+            end
+        end
+        player1.prediction = {x=pt.x,y=pt.y,d=pt.d}
+    else
+        player1.prediction = nil
+        predictwall.collsionpt = nil
+    end
+
+    if (player1.prediction) then
+        player1.prediction.since = 0;
+        player1.prediction.dx = ball.dx;
+        player1.prediction.dy = ball.dy;
+        player1.prediction.radius = ball.radius;
+        player1.prediction.exactX = player1.prediction.x;
+        player1.prediction.exactY = player1.prediction.y;
+        local closeness = 0
+        if (ball.dx < 0) then closeness = (ball.x - (player1.x+player1.width)) / SCREEN_WIDTH else closeness = (player1.x - ball.x) / SCREEN_WIDTH end
+        local error = AILevels[player1.level].aiError * closeness;
+        player1.prediction.y = player1.prediction.y + (rnd(error*2) - error);
+    end
 end
 
 --[[ DRAW ]]
@@ -373,7 +515,18 @@ function draw_board()
     -- top/bot bars
     for x=1,#walls do 
         walls[x].drawf(walls[x])
+        --[[ debug collsion box drawing
+        if (walls[x].collsionpt) then
+            rect(walls[x].collsionpt.x,walls[x].collsionpt.y,walls[x].collsionpt.x+2,walls[x].collsionpt.y+2,walls[x].collisiontextboxcolor)
+        end]]
     end
+    --[[ debug prediction collision box drawing
+    if (predictwall.collsionpt) then
+        rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
+    end
+    if (player1.prediction) then
+        rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
+    end]]
 
     -- net
     if (GAME_STATE == GS_GAME) then
