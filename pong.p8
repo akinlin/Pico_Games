@@ -406,16 +406,6 @@ function intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
     return nil
 end
 
---[[ todo: take out in clean up branch
-function test_update_paddle(a)
-    a.y += (1.5*a.dir)
-    if a.y > 128 - a.height or a.y < 0 then
-        a.dir *= -1
-    end
-
-    if flr(rnd(100)) == 5 then a.dir *= -1 end
-end]]
-
 function run_ai(dt, ball)
     -- check if the ball is coming or going
     if (((ball.x < player1.x) and (ball.dx < 0)) or
