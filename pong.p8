@@ -50,15 +50,10 @@ function init_board()
     local bottom = create_wall(0,SCREEN_HEIGHT-3,SCREEN_WIDTH,3)
     add(walls, bottom)
 
-    -- test left, right walls
-    --local left = create_wall(0,3,3,SCREEN_HEIGHT-3)
-    --add(walls, left)
+    init_net()
+end
 
-    --local right = create_wall(SCREEN_WIDTH-3,3,SCREEN_WIDTH,SCREEN_HEIGHT-3)
-    --add(walls, right)
-    -- end test
-
-    -- set up net
+function init_net()
     net = {
         block_width = 1,
         block_height = 1,
@@ -106,8 +101,6 @@ function init_players()
     predictwall = create_wall(player1.x,-100,player1.width,SCREEN_HEIGHT+200)
     predictwall.collisiontextboxcolor = 10
     predictwall.drawf = function(a) rect(a.x,a.y,a.x+a.width,a.y+a.height,1) end
-    --predictwall.collsionpt = {x=15,y=30,d="right"}
-    --add(walls, predictwall)
 
     -- player 2 is always a human player
     player2 = create_wall(SCREEN_WIDTH-paddle_width-4,paddle_starting_y,paddle_width,paddle_height)
@@ -133,7 +126,7 @@ function init_ball()
         miny = ny,
         maxx = xx,
         maxy = xy,
-        x = 64,--rnd(xx),
+        x = 64,
         y = rnd(xy),
         dx = (xx - nx) / (flr(rnd(7)+1) * coin_flip()),
         dy = (xy - ny) / (flr(rnd(7)+1) * coin_flip()),
@@ -235,18 +228,11 @@ function update_game_state()
         init_ball()
     end
 
-    -- test paddle movement
-    --test_update_paddle(player1)
-    --test_update_paddle(player2)
     run_ai(dt, ball)
 end
 
 function handle_game_input()
-    if btnp(❎) then
-        GAME_STATE = GS_GAMEOVER
-    end
-
-     inputdx = 0
+    local inputdx = 0
     if (btn(⬇️)) then
         if (player2.y < SCREEN_HEIGHT - player2.height - 3) then
             player2.dir = 1
@@ -327,7 +313,6 @@ function update_ball(dt)
     end
 
     if pt then
-        lasthit = pt.d
         if (pt.d == 'left' or pt.d == 'right') then
             pos.x = pt.x;
             pos.dx = -pos.dx;
