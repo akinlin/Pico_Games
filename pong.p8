@@ -13,6 +13,8 @@ GS_GAMEOVER = 3
 
 GAME_STATE = GS_UNINITIALIZED
 
+SCORE_TO_WIN = 11
+
 -- [[ HELPER FUNCTIONS ]]
 function coin_flip()
     if rnd(2) > 1 then
@@ -35,9 +37,6 @@ function reset_game()
 
     timelast = time()
     dt = 0
-
-    intercept_line_a = {x1=0,y1=0,x2=0,y2=0}
-    intercept_line_b = {x1=0,y1=0,x2=0,y2=0}
 
     GAME_STATE = GS_MENU
 end
@@ -74,13 +73,13 @@ end
 function init_hud()
     hud = {
         p1_score = 0,
-        p1_x = 55,
-        p1_y = 7,
+        p1_x = 25,
+        p1_y = 10,
         p1_color = 7,
         -- p2 is human player
         p2_score = 0,
-        p2_x = 68,
-        p2_y = 7,
+        p2_x = 95,
+        p2_y = 10,
         p2_color = 7,
     }
 end
@@ -225,7 +224,7 @@ function update_game_state()
         update_ball(dt)
     else
         if (ball.dx > 0) then hud.p1_score += 1 else hud.p2_score += 1 end
-        if (hud.p1_score == 9) or (hud.p2_score == 9) then GAME_STATE = GS_GAMEOVER end
+        if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then GAME_STATE = GS_GAMEOVER end
         init_ball()
     end
 
@@ -323,22 +322,33 @@ function update_ball(dt)
         end
     end
 
---[[
     -- add/remove spin based on paddle direction
-    if (paddle.up) then
-        local delta
-        if (pos.dy < 0) then delta = .5 delta = 1.5 end
-        pos.dy = pos.dy * delta
-    elseif (paddle.down) then
-        local delta
-        if (pos.dy > 0) then delta = .5 delta = 1.5 end
-        pos.dy = pos.dy * delta
-    end]]
+    if (player1.collsionpt) or (player2.collsionpt) then
+        if (player1.collsionpt) then
+            apply_spin(player1, pos)
+            player1.collsionpt = nil
+        else
+            apply_spin(player2, pos)
+            player2.collsionpt = nil
+        end
+    end
 
     ball.x = pos.x
     ball.y = pos.y
     ball.dx = pos.dx
     ball.dy = pos.dy
+end
+
+function apply_spin(collision_wall, pos)
+    if (collision_wall.dir == -1) then
+        local delta
+        if (pos.dy < 0) then delta = .5 else delta = 1.5 end
+        pos.dy = pos.dy * delta
+    elseif (collision_wall.dir == 1) then
+        local delta
+        if (pos.dy > 0) then delta = .5 else delta = 1.5 end
+        pos.dy = pos.dy * delta
+    end
 end
 
 function ball_intercept(ball, paddle, nx, ny)
