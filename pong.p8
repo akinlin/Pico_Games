@@ -43,10 +43,10 @@ end
 
 function init_board()
     walls = {}
-    local top = create_wall(0,0,SCREEN_WIDTH,3)
+    local top = create_wall(0,-4,SCREEN_WIDTH,3)
     add(walls, top)
 
-    local bottom = create_wall(0,SCREEN_HEIGHT-3,SCREEN_WIDTH,3)
+    local bottom = create_wall(0,SCREEN_HEIGHT,SCREEN_WIDTH,3)
     add(walls, bottom)
 
     init_net()
@@ -54,12 +54,12 @@ end
 
 function init_net()
     net = {
-        block_width = 1,
+        block_width = 0,
         block_height = 1,
         block_space = 3,
-        x = 64-.5,
+        x = 58,
         y = 0,
-        color = 7,
+        color = 6,
         drawnet = function()
             ypos = net.y
             while (ypos < 128) do
@@ -78,7 +78,7 @@ function init_hud()
         p1_color = 7,
         -- p2 is human player
         p2_score = 0,
-        p2_x = 95,
+        p2_x = 115,
         p2_y = 10,
         p2_color = 7,
     }
@@ -86,10 +86,10 @@ end
 
 function init_players()
     -- player paddels are added to the walls array for rendering
-    local paddle_width = 2
-    local paddle_height = 16
+    local paddle_width = 1
+    local paddle_height = 5
     local paddle_starting_y = (SCREEN_HEIGHT/2)-(paddle_height/2)
-    player1 = create_wall(4,paddle_starting_y,paddle_width,paddle_height)
+    player1 = create_wall(3,paddle_starting_y,paddle_width,paddle_height)
     player1.dir = 1
     -- in a 1 player game player1 is ai, add prediction member
     player1.prediction = nil
@@ -102,7 +102,7 @@ function init_players()
     predictwall.drawf = function(a) rect(a.x,a.y,a.x+a.width,a.y+a.height,1) end
 
     -- player 2 is always a human player
-    player2 = create_wall(SCREEN_WIDTH-paddle_width-4,paddle_starting_y,paddle_width,paddle_height)
+    player2 = create_wall(SCREEN_WIDTH-paddle_width-8,paddle_starting_y,paddle_width,paddle_height)
     player2.dir = 1
     add(walls, player2)
 end
@@ -120,7 +120,7 @@ function init_ball()
     
     ball = {
         radius = rad,
-        color = 9,
+        color = 6,
         minx = nx,
         miny = ny,
         maxx = xx,
@@ -183,7 +183,7 @@ function create_wall(xpos,ypos,w,h)
         height = h,
         x = xpos,
         y = ypos,
-        color = 7,
+        color = 6,
         collsion = true,
         collsionpt = nil,
         collisiontextboxcolor = 8,
@@ -219,8 +219,9 @@ function update_game_state()
     dt = time() - timelast
     timelast = time()
 
-    if (ball.x > ball.radius) and (ball.x < SCREEN_WIDTH - ball.radius) and 
-        (ball.y < SCREEN_HEIGHT-ball.radius) and (ball.y > ball.radius) then 
+    -- todo: check if ball is in the safe zone
+    if (ball.x > -ball.radius) and (ball.x < SCREEN_WIDTH + ball.radius) and 
+        (ball.y < SCREEN_HEIGHT+ball.radius) and (ball.y > -ball.radius) then 
         update_ball(dt)
     else
         if (ball.dx > 0) then hud.p1_score += 1 else hud.p2_score += 1 end
@@ -513,12 +514,27 @@ function draw_board()
     end
 
     -- hud
+    draw_score()
+end
+
+function draw_score()
+    -- set enable, padding, wide, tall, inverted, dotty
+    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8 | 0x20 | 0x40)
+    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8)
+
+    --print(hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
+    --print(hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
+
+    -- clear all flags, including enable
+    --poke(0x5f58, 0)
+
     print("\^p" .. hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
     print("\^p" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
 end
 
 function draw_ball()
-    circfill(ball.x, ball.y, ball.radius, ball.color)
+    rectfill(ball.x,ball.y,ball.x+ball.radius,ball.y+ball.radius,ball.color)
+    --circfill(ball.x, ball.y, ball.radius, ball.color)
 end
 
 function draw_debug()
