@@ -223,7 +223,17 @@ function update_game_state()
         (ball.y < SCREEN_HEIGHT-ball.radius) and (ball.y > ball.radius) then 
         update_ball(dt)
     else
-        if (ball.dx > 0) then hud.p1_score += 1 else hud.p2_score += 1 end
+        if (ball.dx > 0) then 
+            hud.p1_score += 1
+            if (player1.level < 17) then
+                player1.level += 1
+            end
+        else 
+            hud.p2_score += 1
+            if (player1.level > 1) then
+                player1.level -= 1
+            end
+        end
         if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then GAME_STATE = GS_GAMEOVER end
         init_ball()
     end
