@@ -15,7 +15,7 @@ GAME_STATE = GS_UNINITIALIZED
 
 SCORE_TO_WIN = 11
 
-PADDLE_SPEED = 2.5
+PADDLE_SPEED = 3
 
 -- [[ HELPER FUNCTIONS ]]
 function coin_flip()
@@ -97,6 +97,7 @@ function init_players()
     player1.prediction = nil
     player1.level = 8
     player1.collisiontextboxcolor = 14
+    player1.visible = false
     add(walls, player1)
     -- test wall for ai prediction
     predictwall = create_wall(player1.x,-100,player1.width,SCREEN_HEIGHT+200)
@@ -106,6 +107,7 @@ function init_players()
     -- player 2 is always a human player
     player2 = create_wall(SCREEN_WIDTH-paddle_width-8,paddle_starting_y,paddle_width,paddle_height)
     player2.dir = 1
+    player2.visible = false
     add(walls, player2)
 end
 
@@ -186,6 +188,7 @@ function create_wall(xpos,ypos,w,h)
         x = xpos,
         y = ypos,
         color = 6,
+        visible = true,
         collsion = true,
         collsionpt = nil,
         collisiontextboxcolor = 8,
@@ -212,6 +215,8 @@ end
 function update_menu_state()
     if btnp(❎) then
         GAME_STATE = GS_GAME
+        player1.visible = true
+        player2.visible = true
     end
 end
 
@@ -237,7 +242,11 @@ function update_game_state()
                 player1.level -= 1
             end
         end
-        if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then GAME_STATE = GS_GAMEOVER end
+        if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then 
+            GAME_STATE = GS_GAMEOVER
+            player1.visible = false
+            player2.visible = false
+        end
         init_ball()
     end
 
@@ -514,12 +523,6 @@ function _draw()
         draw_ball()
     elseif (GAME_STATE == GS_MENU) then
         print("press ❎ to start",32,64,7)
-    elseif (GAME_STATE == GS_GAMEOVER) then
-        if (hud.p2_score > hud.p1_score) then
-            print("you win!!",45,64,7)
-        else
-            print("you lose!!",45,64,7)
-        end
     end
 
     -- debug rendering
@@ -528,14 +531,12 @@ end
 
 function draw_board()
     -- draw walls
-    for x=1,#walls do 
-        walls[x].drawf(walls[x])
+    for x=1,#walls do
+        if (walls[x].visible) then walls[x].drawf(walls[x]) end
     end
 
     -- net
-    if (GAME_STATE == GS_GAME) then
-        net.drawnet()
-    end
+    net.drawnet()
 
     -- hud
     draw_score()
