@@ -15,6 +15,8 @@ GAME_STATE = GS_UNINITIALIZED
 
 SCORE_TO_WIN = 11
 
+PADDLE_SPEED = 2.5
+
 -- [[ HELPER FUNCTIONS ]]
 function coin_flip()
     if rnd(2) > 1 then
@@ -247,7 +249,7 @@ function handle_game_input()
     if (btn(⬇️)) then
         if (player2.y < SCREEN_HEIGHT - player2.height - 3) then
             player2.dir = 1
-            inputdx = 1.5
+            inputdx = PADDLE_SPEED
         else
             player2.y = SCREEN_HEIGHT - player2.height - 3
         end
@@ -256,7 +258,7 @@ function handle_game_input()
     if (btn(⬆️)) then
         if (player2.y > 3) then
             player2.dir = -1
-            inputdx = 1.5
+            inputdx = PADDLE_SPEED
         else
             player2.y = 3
         end
@@ -448,7 +450,7 @@ function run_ai(dt, ball)
             player1.dir = 0
         end
     end
-    player1.y += (1.5*player1.dir)
+    player1.y += (PADDLE_SPEED*player1.dir)
     if (player1.y < 3) then
         player1.y = 3
     end
