@@ -135,23 +135,23 @@ end
 
 function init_ai()
     AILevels = {}
-    create_aitype(0.2, 40) -- 1: ai is losing by 8
-    create_aitype(0.3, 50) -- 2: ai is losing by 7
-    create_aitype(0.4, 60) -- 3: ai is losing by 6
-    create_aitype(0.5, 70) -- 4: ai is losing by 5
-    create_aitype(0.6, 80) -- 5: ai is losing by 4
-    create_aitype(0.7, 90) -- 6:ai is losing by 3
-    create_aitype(0.8, 100) -- 7: ai is losing by 2
-    create_aitype(0.9, 110) -- 8: ai is losing by 1 
-    create_aitype(1.0, 120) -- 9: tie
-    create_aitype(1.1, 130) -- 10: ai is winning by 1
-    create_aitype(1.2, 140) -- 11: ai is winning by 2
-    create_aitype(1.3, 150) -- 12: ai is winning by 3
-    create_aitype(1.4, 160) -- 13: ai is winning by 4
-    create_aitype(1.5, 170) -- 14: ai is winning by 5
-    create_aitype(1.6, 180) -- 15: ai is winning by 6
-    create_aitype(1.7, 190) -- 16: ai is winning by 7
-    create_aitype(1.8, 200) -- 17: ai is winning by 8
+    create_aitype(0.2, 1) -- 1: ai is losing by 8
+    create_aitype(0.3, 5) -- 2: ai is losing by 7
+    create_aitype(0.4, 10) -- 3: ai is losing by 6
+    create_aitype(0.5, 15) -- 4: ai is losing by 5
+    create_aitype(0.6, 20) -- 5: ai is losing by 4
+    create_aitype(0.7, 25) -- 6:ai is losing by 3
+    create_aitype(0.8, 30) -- 7: ai is losing by 2
+    create_aitype(0.9, 35) -- 8: ai is losing by 1 
+    create_aitype(1.0, 40) -- 9: tie
+    create_aitype(1.1, 45) -- 10: ai is winning by 1
+    create_aitype(1.2, 50) -- 11: ai is winning by 2
+    create_aitype(1.3, 55) -- 12: ai is winning by 3
+    create_aitype(1.4, 60) -- 13: ai is winning by 4
+    create_aitype(1.5, 65) -- 14: ai is winning by 5
+    create_aitype(1.6, 70) -- 15: ai is winning by 6
+    create_aitype(1.7, 75) -- 16: ai is winning by 7
+    create_aitype(1.8, 80) -- 17: ai is winning by 8
 end
 
 function create_aitype(reaction, error)
@@ -401,11 +401,23 @@ function ball_intercept(ball, paddle, nx, ny)
 end
 
 function intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
-    local denom = ((y4-y3) * (x2-x1)) - ((x4-x3) * (y2-y1))
+    -- todo: add support for a screen bounding box 
+    -- clipping the line extentions so the numbers dont go above 32K
+    if (x1 > 140) then x1 = 140 elseif (x1 < -50) then x1 = -50 end
+    if (x2 > 140) then x2 = 140 elseif (x2 < -50) then x2 = -50 end
+    if (x3 > 140) then x3 = 140 elseif (x3 < -50) then x3 = -50 end
+    if (x4 > 140) then x4 = 140 elseif (x4 < -50) then x4 = -50 end
+     
+    if (y1 > 140) then y1 = 140 elseif (y1 < -50) then y1 = -50 end
+    if (y2 > 140) then y2 = 140 elseif (y2 < -50) then y2 = -50 end
+    if (y3 > 140) then y3 = 140 elseif (y3 < -50) then y3 = -50 end
+    if (y4 > 140) then y4 = 140 elseif (y4 < -50) then y4 = -50 end
+
+    local denom = ((x1-x2) * (y3 -y4)) - ((y1-y2) * (x3-x4))
     if (denom != 0) then
-        local ua = (((x4-x3) * (y1-y3)) - ((y4-y3) * (x1-x3))) / denom
+        local ua = (((x1-x3) * (y3-y4)) - ((y1-y3) * (x3-x4))) / denom
         if ((ua >= 0) and (ua <= 1)) then
-            local ub = (((x2-x1) * (y1-y3)) - ((y2-y1) * (x1-x3))) / denom
+            local ub = (((x1-x3) * (y1-y2)) - ((y1-y3) * (x1-x2))) / denom
             if ((ub >= 0) and (ub <= 1)) then
                 local x = x1 + (ua * (x2-x1))
                 local y = y1 + (ua * (y2-y1))
@@ -428,9 +440,9 @@ function run_ai(dt, ball)
     predict(ball, dt);
 
     if (player1.prediction) then
-        if (player1.prediction.y < (player1.y + player1.height/2 - 5)) then
+        if (player1.prediction.y < (player1.y + player1.height/2 - 2)) then
             player1.dir = -1
-        elseif (player1.prediction.y > ((player1.y+player1.height) - player1.height/2 + 5)) then
+        elseif (player1.prediction.y > ((player1.y+player1.height) - player1.height/2 + 2)) then
             player1.dir = 1
         else
             player1.dir = 0
@@ -485,8 +497,8 @@ function predict(ball, dt)
         player1.prediction.exactY = player1.prediction.y;
         local closeness = 0
         if (ball.dx < 0) then closeness = (ball.x - (player1.x+player1.width)) / SCREEN_WIDTH else closeness = (player1.x - ball.x) / SCREEN_WIDTH end
-        local error = AILevels[player1.level].aiError * closeness;
-        player1.prediction.y = player1.prediction.y + (rnd(error*2) - error);
+        local error = AILevels[player1.level].aiError * closeness
+        player1.prediction.y = player1.prediction.y + (rnd(error*2) - error)
     end
 end
 
@@ -564,6 +576,8 @@ function draw_debug()
     if (player1.prediction) then
         rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
     end
+
+    rect(predictwall.x,predictwall.y,predictwall.x+predictwall.width,predictwall.y+predictwall.height,8)
 end
 
 __gfx__
