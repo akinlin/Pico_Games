@@ -336,11 +336,11 @@ function update_ball(dt)
 
     if pt then
         if (pt.d == 'left' or pt.d == 'right') then
-            pos.x = pt.x;
-            pos.dx = -pos.dx;
+            pos.x = pt.x
+            pos.dx = -pos.dx
         elseif (pt.d == 'top' or pt.d == 'bottom') then
-            pos.y = pt.y;
-            pos.dy = -pos.dy;
+            pos.y = pt.y
+            pos.dy = -pos.dy
         end
     end
 
@@ -448,7 +448,7 @@ function run_ai(dt, ball)
     end
 
     -- if coming predict the intersection point
-    predict(ball, dt);
+    predict(ball, dt)
 
     if (player1.prediction) then
         if (player1.prediction.y < (player1.y + player1.height/2 - 2)) then
@@ -490,7 +490,7 @@ function predict(ball, dt)
             if (pt.y < t) then
                 pt.y = t + (t - pt.y)
             elseif (pt.y > b) then
-                pt.y = t + (b - t) - (pt.y - b);
+                pt.y = t + (b - t) - (pt.y - b)
             end
         end
         player1.prediction = {x=pt.x,y=pt.y,d=pt.d}
@@ -500,12 +500,12 @@ function predict(ball, dt)
     end
 
     if (player1.prediction) then
-        player1.prediction.since = 0;
-        player1.prediction.dx = ball.dx;
-        player1.prediction.dy = ball.dy;
-        player1.prediction.radius = ball.radius;
-        player1.prediction.exactX = player1.prediction.x;
-        player1.prediction.exactY = player1.prediction.y;
+        player1.prediction.since = 0
+        player1.prediction.dx = ball.dx
+        player1.prediction.dy = ball.dy
+        player1.prediction.radius = ball.radius
+        player1.prediction.exactX = player1.prediction.x
+        player1.prediction.exactY = player1.prediction.y
         local closeness = 0
         if (ball.dx < 0) then closeness = (ball.x - (player1.x+player1.width)) / SCREEN_WIDTH else closeness = (player1.x - ball.x) / SCREEN_WIDTH end
         local error = AILevels[player1.level].aiError * closeness
