@@ -1,6 +1,8 @@
 pico-8 cartridge // http://www.pico-8.com
-version 32
+version 41
 __lua__
+
+#include libs/dialogue_system.lua
 
 SCREEN_WIDTH = 128
 SCREEN_HEIGHT = 128
@@ -28,7 +30,26 @@ end
 --[[ INIT ]]
 function _init()
     reset_game()
+
+    -- TEST TEST
+    dialogue_init()
+    --[[ TEST TEST ]]--
 end
+
+-- TEST TEST --
+function dialogue_init()
+    -- creates the global gm object
+	gm = game_manager:new()
+	-- create textbox object
+	tb = textbox:new(0,64,65,5,12)
+	-- add 5 levels
+	gm:add_level(level:new(dialogue:new('denial',5),tb))
+	gm:add_level(level:new(dialogue:new('anger',8),tb))
+	gm:add_level(level:new(dialogue:new('bargining',9),tb))
+	gm:add_level(level:new(dialogue:new('depression',1),tb))
+	gm:add_level(level:new(dialogue:new('acceptance',3),tb))
+end
+--[[ TEST TEST ]]--
 
 function reset_game()
     init_board()
@@ -210,8 +231,21 @@ function _update()
     elseif GAME_STATE == GS_GAMEOVER then
         update_gameover_state()
     end
-end
 
+    --[[ TEST TEST ]]--
+    update_timers()
+	update_input()
+
+	gm:update()
+    --[[ TEST TEST ]]--
+end
+--[[ TEST TEST ]]--
+function update_input()
+	if btnp(❎) then
+		gm:input(game_manager.inputevents.key_pressed)
+	end
+end
+--[[ TEST TEST ]]--
 function update_menu_state()
     if btnp(❎) then
         GAME_STATE = GS_GAME
@@ -525,6 +559,10 @@ function _draw()
         print("press ❎ to start",32,64,7)
     end
 
+    --[[ TEST TEST ]]--
+    gm:draw()
+    --[[ TEST TEST ]]--
+
     -- debug rendering
     --draw_debug()
 end
@@ -583,6 +621,10 @@ function draw_debug()
     rect(predictwall.x,predictwall.y,predictwall.x+predictwall.width,predictwall.y+predictwall.height,8)
 end
 
+-->8
+-- dialogue system
+-->8
+-- rigid bodies
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
