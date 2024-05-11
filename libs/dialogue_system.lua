@@ -140,11 +140,11 @@ end
 level = {}
 level.__index = level
 level.events = {phrase_complete=40,section_complete=41,sequence_complete=42,level_complete=43,tb_open=44,tb_closed=45}
-function level:new(d,tb)
+function level:new(d,tb,p)
 	local l = {
 		dialogue=d,
 		textbox=tb,
-		pong=nil
+		pong=p
 	}
 	setmetatable(l,level)
 	return l
@@ -197,7 +197,7 @@ function level:update()
 end
 
 function level:draw()
-	tb:draw()
+	self.textbox:draw()
 end
 
 -- [[ dialogue Object ]]

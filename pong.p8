@@ -2,22 +2,17 @@ pico-8 cartridge // http://www.pico-8.com
 version 41
 __lua__
 
-#include libs/dialogue_system.lua
-
-SCREEN_WIDTH = 128
-SCREEN_HEIGHT = 128
-
--- GAME STATES
-GS_UNINITIALIZED = 0
-GS_MENU = 1
-GS_GAME = 2
-GS_GAMEOVER = 3
-
-GAME_STATE = GS_UNINITIALIZED
-
+--[[
+    --Branch Goals--
+    x migrate all game state into game_manager
+    x create a pong object to contain the game
+        x assign it to level
+    - synchronize the pong and dialogue objects
+    x fix the game_manager update function
+]]
 SCORE_TO_WIN = 11
 
-PADDLE_SPEED = 3
+PADDLE_SPEED = 4
 
 -- [[ HELPER FUNCTIONS ]]
 function coin_flip()
@@ -27,55 +22,339 @@ function coin_flip()
     return -1
 end
 
+timers = {}
+function add_timer(d,e)
+	t = {
+        time=0,
+        delaytime=d,
+		event=e,
+		tick=nil
+    }
+    add(timers,t)
+	return t
+end
+
+function update_timers()
+	for x=#timers, 1, -1 do
+		timer = timers[x]
+		timer.time += 1
+		--if timer.tick then timer.tick() end
+		if timer.time > timer.delaytime then
+			--if timer.event then timer.event() end
+			timer.event()
+			del(timers,timer)
+		end
+	end
+end
+
+-- [[ Game Manager ]]
+game_manager = {}
+-- states and events
+game_manager.states = {title=0,menu=1,options=2,level=3,gameover=4,intermission=5}
+game_manager.events = {level_complete=10}
+game_manager.inputevents = {key_pressed=20}
+game_manager.timerevents = {timer_fired=30}
+function game_manager:new()
+	local gm = {
+		state = game_manager.states.menu,
+		levels = {},
+		level_index = 1
+	}
+	setmetatable(gm, {
+		__index = function(t, k)
+			if k == "level" then
+				return t.levels[t.level_index]
+			else
+				return game_manager[k]
+			end
+		end
+	})
+	return gm
+end
+
+function game_manager:change_state(s)
+	self.state = s
+end
+
+function game_manager:add_level(l)
+	add(self.levels,l)
+end
+
+function game_manager:event(e)
+	local events = {
+		[game_manager.events.level_complete] = function()
+			self.level_index += 1
+			self:change_state(game_manager.states.intermission)
+        end
+	}
+	
+	local event = events[e]
+    if event then
+        event()
+	elseif self.state == game_manager.states.level then
+		self.level:event(e)
+    end
+end
+
+function game_manager:input(e)
+	local inputevents = {
+		[game_manager.inputevents.key_pressed] = function()
+			if self.state == game_manager.states.menu or game_manager.states.intermission then
+				if self.level_index <= #self.levels then
+					self:change_state(game_manager.states.level)
+					self.level:load()
+				else
+					-- if no levels loaded exit to game over
+					self:change_state(game_manager.states.gameover)
+				end
+			end
+        end
+	}
+
+	local input = inputevents[e]
+    if input then
+        input()
+    elseif self.state == game_manager.states.level then
+		self.level:event(e)
+    end
+end
+
+function game_manager:update() 
+    update_timers()
+	update_input()
+
+	if self.state == game_manager.states.level then
+        -- update pong
+        pong.update_game_state()
+        -- update dialogue
+		self.level:update()
+    elseif gm.state == game_manager.states.gameover then
+        update_gameover_state()
+    elseif gm.state == game_manager.states.intermission then
+        -- update pong
+        pong.update_game_state()
+	end
+end
+
+function game_manager:draw()
+    pong.draw_board()
+
+	local states = {
+		[game_manager.states.title] = function()
+			print("title",44,60)
+        end,
+		[game_manager.states.menu] = function()
+			print("press ❎ to start",32,64,7)
+        end,
+		[game_manager.states.options] = function()
+			print("options",44,60)
+        end,
+        [game_manager.states.level] = function()
+            self.level:draw()
+        end,
+		[game_manager.states.gameover] = function()
+			print("game over",45,60)
+		end,
+		[game_manager.states.intermission] = function()
+            -- pong
+            pong.draw_ball()
+            print("press ❎ to continue",32,64,7)
+		end
+	}
+	
+	local state = states[self.state]
+    if state then
+        state()
+    else
+        printh('not draw state for '..self.state)
+    end
+end
+
+-- [[ Level ]]
+level = {}
+level.__index = level
+level.events = {phrase_complete=40,section_complete=41,sequence_complete=42,level_complete=43,tb_open=44,tb_closed=45}
+function level:new(d,tb,p)
+	local l = {
+		dialogue=d,
+		textbox=tb,
+		pong=p
+	}
+	setmetatable(l,level)
+	return l
+end
+
+function level:load() 
+	self.textbox.sectiontitle=self.dialogue.title
+	self.textbox.sectionphrase=self.dialogue.phrase
+	self.textbox.rect.color=self.dialogue.color
+	self.textbox:open(function() gm:event(level.events.tb_open) end)
+
+    player1.visible = true
+    player2.visible = true
+end
+
+function level:event(e)
+    local actions = {
+        [level.events.tb_open] = function()
+            -- start text sequence
+            self.dialogue:load_next()
+        end,
+        [level.events.tb_closed] = function()
+            -- start section delay
+            add_timer(5,function () self.textbox:open(function() gm:event(level.events.tb_open) end) end)
+        end,
+        [level.events.sequence_complete] = function()
+            self.textbox:close(function () gm:event(game_manager.events.level_complete) end)
+        end,
+        [level.events.section_complete] = function()
+            self.textbox.sectionphrase=self.dialogue.phrase
+            self.textbox:close(function () gm:event(level.events.tb_closed) end)
+        end,
+        [level.events.phrase_complete] = function()
+            self.textbox.sectionphrase=self.dialogue.phrase
+        end
+    }
+
+    local action = actions[e]
+    if action then
+        action()
+    else
+        self.dialogue:event(e)
+    end
+end
+
+function level:input()
+	-- pass input for pong
+	-- pass input for texbox
+end
+
+function level:update()
+	self.textbox:update()
+end
+
+function level:draw()
+    pong.draw_ball()
+	tb:draw()
+end
+
 --[[ INIT ]]
 function _init()
-    reset_game()
-
-    -- TEST TEST
-    dialogue_init()
-    --[[ TEST TEST ]]--
-end
-
--- TEST TEST --
-function dialogue_init()
     -- creates the global gm object
 	gm = game_manager:new()
+    gm.screenwidth = 128
+    gm.screenheight = 128
 	-- create textbox object
 	tb = textbox:new(0,64,65,5,12)
+    -- create pong object
+    p = pong:new()
+    p:reset_game()
 	-- add 5 levels
-	gm:add_level(level:new(dialogue:new('denial',5),tb))
-	gm:add_level(level:new(dialogue:new('anger',8),tb))
-	gm:add_level(level:new(dialogue:new('bargining',9),tb))
-	gm:add_level(level:new(dialogue:new('depression',1),tb))
-	gm:add_level(level:new(dialogue:new('acceptance',3),tb))
+	gm:add_level(level:new(dialogue:new('denial',5,p),tb))
+	gm:add_level(level:new(dialogue:new('anger',8,p),tb))
+	gm:add_level(level:new(dialogue:new('bargining',9,p),tb))
+	gm:add_level(level:new(dialogue:new('depression',1,p),tb))
+	gm:add_level(level:new(dialogue:new('acceptance',3,p),tb))
 end
---[[ TEST TEST ]]--
 
-function reset_game()
-    init_board()
-    init_hud()
-    init_players()
-    init_ball()
-    init_ai()
+--[[ UPDATE ]]
+function _update()
+	gm:update()
+end
+
+function update_input()
+	if btnp(❎) then
+		gm:input(game_manager.inputevents.key_pressed)
+	end
+end
+
+function update_gameover_state()
+    if btnp(❎) then
+        p:reset_game()
+    end
+end
+
+--[[ DRAW ]]
+function _draw()
+	cls(0)
+
+    gm:draw()
+
+    -- debug rendering
+    --draw_debug()
+end
+
+function draw_score()
+    -- set enable, padding, wide, tall, inverted, dotty
+    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8 | 0x20 | 0x40)
+    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8)
+
+    --print(hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
+    --print(hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
+
+    -- clear all flags, including enable
+    --poke(0x5f58, 0)
+
+    print("\^p" .. hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
+    print("\^p" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
+end
+
+function draw_debug()
+    -- draw collsion box on wall
+    for x=1,#walls do 
+        if (walls[x].collision_debug_draw) then 
+            if (walls[x].collsionpt) then
+                rect(walls[x].collsionpt.x,walls[x].collsionpt.y,walls[x].collsionpt.x+2,walls[x].collsionpt.y+2,walls[x].collisiontextboxcolor)
+            end
+        end
+    end
+
+    -- debug prediction collision box drawing
+    if (predictwall.collsionpt) then
+        rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
+    end
+    if (player1.prediction) then
+        rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
+    end
+
+    rect(predictwall.x,predictwall.y,predictwall.x+predictwall.width,predictwall.y+predictwall.height,8)
+end
+
+-->8
+-- pong
+pong = {}
+pong.__index = pong
+function pong:new()
+	local p = {}
+    setmetatable(p,pong)
+	return p
+end
+
+function pong:reset_game()
+    self:init_board()
+    self:init_hud()
+    self:init_players()
+    self:init_ball()
+    self:init_ai()
 
     timelast = time()
     dt = 0
 
-    GAME_STATE = GS_MENU
+    gm:change_state(game_manager.states.menu)
 end
 
-function init_board()
+function pong:init_board()
     walls = {}
-    local top = create_wall(0,-4,SCREEN_WIDTH,3)
+    local top = self:create_wall(0,-4,gm.screenwidth,3)
     add(walls, top)
 
-    local bottom = create_wall(0,SCREEN_HEIGHT,SCREEN_WIDTH,3)
+    local bottom = self:create_wall(0,gm.screenheight,gm.screenwidth,3)
     add(walls, bottom)
 
-    init_net()
+    self:init_net()
 end
 
-function init_net()
+function pong:init_net()
     net = {
         block_width = 0,
         block_height = 1,
@@ -93,7 +372,7 @@ function init_net()
     }
 end
 
-function init_hud()
+function pong:init_hud()
     hud = {
         p1_score = 0,
         p1_x = 25,
@@ -107,12 +386,12 @@ function init_hud()
     }
 end
 
-function init_players()
+function pong:init_players()
     -- player paddels are added to the walls array for rendering
     local paddle_width = 1
     local paddle_height = 5
-    local paddle_starting_y = (SCREEN_HEIGHT/2)-(paddle_height/2)
-    player1 = create_wall(3,paddle_starting_y,paddle_width,paddle_height)
+    local paddle_starting_y = (gm.screenheight/2)-(paddle_height/2)
+    player1 = self:create_wall(3,paddle_starting_y,paddle_width,paddle_height)
     player1.dir = 1
     -- in a 1 player game player1 is ai, add prediction member
     player1.prediction = nil
@@ -121,26 +400,26 @@ function init_players()
     player1.visible = false
     add(walls, player1)
     -- test wall for ai prediction
-    predictwall = create_wall(player1.x,-100,player1.width,SCREEN_HEIGHT+200)
+    predictwall = self:create_wall(player1.x,-100,player1.width,gm.screenheight+200)
     predictwall.collisiontextboxcolor = 10
     predictwall.drawf = function(a) rect(a.x,a.y,a.x+a.width,a.y+a.height,1) end
 
     -- player 2 is always a human player
-    player2 = create_wall(SCREEN_WIDTH-paddle_width-8,paddle_starting_y,paddle_width,paddle_height)
+    player2 = self:create_wall(gm.screenwidth-paddle_width-8,paddle_starting_y,paddle_width,paddle_height)
     player2.dir = 1
     player2.visible = false
     add(walls, player2)
 end
 
-function init_ball()
+function pong:init_ball()
     MAX_ACCEL = 10
     MAX_SPEED = 160
     
     local rad = 1
     local nx = rad
     local ny = 3 + rad
-    local xx = SCREEN_WIDTH - rad
-    local xy = SCREEN_HEIGHT - 3 - rad
+    local xx = gm.screenwidth - rad
+    local xy = gm.screenheight - 3 - rad
     local acc = 1
     
     ball = {
@@ -158,28 +437,28 @@ function init_ball()
     }
 end
 
-function init_ai()
+function pong:init_ai()
     AILevels = {}
-    create_aitype(0.2, 1) -- 1: ai is losing by 8
-    create_aitype(0.3, 5) -- 2: ai is losing by 7
-    create_aitype(0.4, 10) -- 3: ai is losing by 6
-    create_aitype(0.5, 15) -- 4: ai is losing by 5
-    create_aitype(0.6, 20) -- 5: ai is losing by 4
-    create_aitype(0.7, 25) -- 6:ai is losing by 3
-    create_aitype(0.8, 30) -- 7: ai is losing by 2
-    create_aitype(0.9, 35) -- 8: ai is losing by 1 
-    create_aitype(1.0, 40) -- 9: tie
-    create_aitype(1.1, 45) -- 10: ai is winning by 1
-    create_aitype(1.2, 50) -- 11: ai is winning by 2
-    create_aitype(1.3, 55) -- 12: ai is winning by 3
-    create_aitype(1.4, 60) -- 13: ai is winning by 4
-    create_aitype(1.5, 65) -- 14: ai is winning by 5
-    create_aitype(1.6, 70) -- 15: ai is winning by 6
-    create_aitype(1.7, 75) -- 16: ai is winning by 7
-    create_aitype(1.8, 80) -- 17: ai is winning by 8
+    self:create_aitype(0.2, 1) -- 1: ai is losing by 8
+    self:create_aitype(0.3, 5) -- 2: ai is losing by 7
+    self:create_aitype(0.4, 10) -- 3: ai is losing by 6
+    self:create_aitype(0.5, 15) -- 4: ai is losing by 5
+    self:create_aitype(0.6, 20) -- 5: ai is losing by 4
+    self:create_aitype(0.7, 25) -- 6:ai is losing by 3
+    self:create_aitype(0.8, 30) -- 7: ai is losing by 2
+    self:create_aitype(0.9, 35) -- 8: ai is losing by 1 
+    self:create_aitype(1.0, 40) -- 9: tie
+    self:create_aitype(1.1, 45) -- 10: ai is winning by 1
+    self:create_aitype(1.2, 50) -- 11: ai is winning by 2
+    self:create_aitype(1.3, 55) -- 12: ai is winning by 3
+    self:create_aitype(1.4, 60) -- 13: ai is winning by 4
+    self:create_aitype(1.5, 65) -- 14: ai is winning by 5
+    self:create_aitype(1.6, 70) -- 15: ai is winning by 6
+    self:create_aitype(1.7, 75) -- 16: ai is winning by 7
+    self:create_aitype(1.8, 80) -- 17: ai is winning by 8
 end
 
-function create_aitype(reaction, error)
+function pong:create_aitype(reaction, error)
     a = {
         aiReaction = reaction,
         aiError = error
@@ -188,8 +467,8 @@ function create_aitype(reaction, error)
     return a
 end
 
-function create_prediction(s,dx,r,ex,ey,x,y,d)
-    p = {
+function pong:create_prediction(s,dx,r,ex,ey,x,y,d)
+    local p = {
         since=s,
         dx=dx,
         radius=r,
@@ -202,7 +481,7 @@ function create_prediction(s,dx,r,ex,ey,x,y,d)
     return p
 end
 
-function create_wall(xpos,ypos,w,h)
+function pong:create_wall(xpos,ypos,w,h)
     wall = {
         width = w,
         height = h,
@@ -222,48 +501,16 @@ function create_wall(xpos,ypos,w,h)
     return wall
 end
 
---[[ UPDATE ]]
-function _update()
-    if GAME_STATE == GS_MENU then
-        update_menu_state()
-    elseif GAME_STATE == GS_GAME then
-        update_game_state()
-    elseif GAME_STATE == GS_GAMEOVER then
-        update_gameover_state()
-    end
-
-    --[[ TEST TEST ]]--
-    update_timers()
-	update_input()
-
-	gm:update()
-    --[[ TEST TEST ]]--
-end
---[[ TEST TEST ]]--
-function update_input()
-	if btnp(❎) then
-		gm:input(game_manager.inputevents.key_pressed)
-	end
-end
---[[ TEST TEST ]]--
-function update_menu_state()
-    if btnp(❎) then
-        GAME_STATE = GS_GAME
-        player1.visible = true
-        player2.visible = true
-    end
-end
-
-function update_game_state()
-    handle_game_input()
+function pong.update_game_state()
+    pong.handle_game_input()
 
     dt = time() - timelast
     timelast = time()
 
     -- todo: check if ball is in the safe zone
-    if (ball.x > -ball.radius) and (ball.x < SCREEN_WIDTH + ball.radius) and 
-        (ball.y < SCREEN_HEIGHT+ball.radius) and (ball.y > -ball.radius) then 
-        update_ball(dt)
+    if (ball.x > -ball.radius) and (ball.x < gm.screenwidth + ball.radius) and 
+        (ball.y < gm.screenheight+ball.radius) and (ball.y > -ball.radius) then 
+        pong.update_ball(dt)
     else
         if (ball.dx > 0) then 
             hud.p1_score += 1
@@ -277,24 +524,24 @@ function update_game_state()
             end
         end
         if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then 
-            GAME_STATE = GS_GAMEOVER
+            gm:change_state(game_manager.states.gameover)
             player1.visible = false
             player2.visible = false
         end
-        init_ball()
+        p:init_ball()
     end
 
-    run_ai(dt, ball)
+    pong.run_ai(dt, ball)
 end
 
-function handle_game_input()
+function pong.handle_game_input()
     local inputdx = 0
     if (btn(⬇️)) then
-        if (player2.y < SCREEN_HEIGHT - player2.height - 3) then
+        if (player2.y < gm.screenheight - player2.height - 3) then
             player2.dir = 1
             inputdx = PADDLE_SPEED
         else
-            player2.y = SCREEN_HEIGHT - player2.height - 3
+            player2.y = gm.screenheight - player2.height - 3
         end
     end
 
@@ -309,13 +556,7 @@ function handle_game_input()
     player2.y += (inputdx*player2.dir)
 end
 
-function update_gameover_state()
-    if btnp(❎) then
-        reset_game()
-    end
-end
-
-function accelerate(x, y, dx, dy, accel, dt)
+function pong.accelerate(x, y, dx, dy, accel, dt)
     -- update position
     local x2 = x + (dx * dt)
     local y2 = y + (dy * dt)
@@ -340,7 +581,7 @@ function accelerate(x, y, dx, dy, accel, dt)
     end
 
     -- return new position
-    p={
+    local p={
         nx = x2-x,
         ny = y2-y,
         x = x2,
@@ -352,15 +593,15 @@ function accelerate(x, y, dx, dy, accel, dt)
     return p
 end
 
-function update_ball(dt)
-    local pos = accelerate(ball.x, ball.y, ball.dx, ball.dy, ball.accel, dt)
+function pong.update_ball(dt)
+    local pos = pong.accelerate(ball.x, ball.y, ball.dx, ball.dy, ball.accel, dt)
 
     -- loop all walls until a collsion is detected
     local x = 1
     local pt = nil
     while (pt == nil) and (x <= #walls) do
         if (walls[x].collsion) then
-            pt = ball_intercept(ball, walls[x], pos.nx, pos.ny)
+            pt = pong.ball_intercept(ball, walls[x], pos.nx, pos.ny)
             if (pt) then
                 walls[x].collsionpt = {x=pt.x,y=pt.y,d=pt.d}
             end
@@ -381,10 +622,10 @@ function update_ball(dt)
     -- add/remove spin based on paddle direction
     if (player1.collsionpt) or (player2.collsionpt) then
         if (player1.collsionpt) then
-            apply_spin(player1, pos)
+            pong.apply_spin(player1, pos)
             player1.collsionpt = nil
         else
-            apply_spin(player2, pos)
+            pong.apply_spin(player2, pos)
             player2.collsionpt = nil
         end
     end
@@ -395,7 +636,7 @@ function update_ball(dt)
     ball.dy = pos.dy
 end
 
-function apply_spin(collision_wall, pos)
+function pong.apply_spin(collision_wall, pos)
     if (collision_wall.dir == -1) then
         local delta
         if (pos.dy < 0) then delta = .5 else delta = 1.5 end
@@ -407,17 +648,17 @@ function apply_spin(collision_wall, pos)
     end
 end
 
-function ball_intercept(ball, paddle, nx, ny)
+function pong.ball_intercept(ball, paddle, nx, ny)
     pt = nil
     if (nx < 0) then
-        pt = intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
+        pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
                         (paddle.x+paddle.width)  + ball.radius, 
                         paddle.y - ball.radius, 
                         (paddle.x+paddle.width)  + ball.radius, 
                         (paddle.y+paddle.height) + ball.radius, 
                         "right")
     elseif (nx > 0) then
-        pt = intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
+        pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
                         paddle.x - ball.radius, 
                         paddle.y - ball.radius, 
                         paddle.x - ball.radius, 
@@ -427,14 +668,14 @@ function ball_intercept(ball, paddle, nx, ny)
 
     if (pt == nil) then
         if (ny < 0) then
-            pt = intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
+            pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
                             (paddle.x+paddle.width)   - ball.radius, 
                             (paddle.y+paddle.height) + ball.radius, 
                             paddle.x  + ball.radius, 
                             (paddle.y+paddle.height) + ball.radius,
                             "bottom")
         elseif (ny > 0) then
-            pt = intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
+            pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
                             paddle.x   - ball.radius, 
                             paddle.y    - ball.radius, 
                             (paddle.x+paddle.width)  + ball.radius, 
@@ -445,7 +686,7 @@ function ball_intercept(ball, paddle, nx, ny)
     return pt
 end
 
-function intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
+function pong.intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
     -- todo: add support for a screen bounding box 
     -- clipping the line extentions so the numbers dont go above 32K
     if (x1 > 140) then x1 = 140 elseif (x1 < -50) then x1 = -50 end
@@ -473,7 +714,7 @@ function intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
     return nil
 end
 
-function run_ai(dt, ball)
+function pong.run_ai(dt, ball)
     -- check if the ball is coming or going
     if (((ball.x < player1.x) and (ball.dx < 0)) or
         ((ball.x > player1.x+player1.width) and (ball.dx > 0))) then
@@ -482,7 +723,7 @@ function run_ai(dt, ball)
     end
 
     -- if coming predict the intersection point
-    predict(ball, dt)
+    pong.predict(ball, dt)
 
     if (player1.prediction) then
         if (player1.prediction.y < (player1.y + player1.height/2 - 2)) then
@@ -497,12 +738,12 @@ function run_ai(dt, ball)
     if (player1.y < 3) then
         player1.y = 3
     end
-    if (player1.y > SCREEN_HEIGHT - player1.height - 3) then
-        player1.y = SCREEN_HEIGHT - player1.height - 3
+    if (player1.y > gm.screenheight - player1.height - 3) then
+        player1.y = gm.screenheight - player1.height - 3
     end
 end
 
-function predict(ball, dt)
+function pong.predict(ball, dt)
     -- only re-predict if the ball changed direction, or its been some amount of time since last prediction
     if (player1.prediction) then
         if ((player1.prediction.dx * ball.dx) > 0) and
@@ -513,12 +754,12 @@ function predict(ball, dt)
         end
     end
 
-    local pt = ball_intercept(ball, predictwall, ball.dx * 2, ball.dy * 2)
+    local pt = pong.ball_intercept(ball, predictwall, ball.dx * 2, ball.dy * 2)
 
     if (pt) then
         predictwall.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
         local t = 3 + ball.radius
-        local b = SCREEN_HEIGHT - 3 - ball.radius
+        local b = gm.screenheight - 3 - ball.radius
 
         while ((pt.y < t) or (pt.y > b)) do
             if (pt.y < t) then
@@ -541,33 +782,13 @@ function predict(ball, dt)
         player1.prediction.exactX = player1.prediction.x
         player1.prediction.exactY = player1.prediction.y
         local closeness = 0
-        if (ball.dx < 0) then closeness = (ball.x - (player1.x+player1.width)) / SCREEN_WIDTH else closeness = (player1.x - ball.x) / SCREEN_WIDTH end
+        if (ball.dx < 0) then closeness = (ball.x - (player1.x+player1.width)) / gm.screenwidth else closeness = (player1.x - ball.x) / gm.screenwidth end
         local error = AILevels[player1.level].aiError * closeness
         player1.prediction.y = player1.prediction.y + (rnd(error*2) - error)
     end
 end
 
---[[ DRAW ]]
-function _draw()
-	cls(0)
-
-    draw_board()
-
-    if (GAME_STATE == GS_GAME) then
-        draw_ball()
-    elseif (GAME_STATE == GS_MENU) then
-        print("press ❎ to start",32,64,7)
-    end
-
-    --[[ TEST TEST ]]--
-    gm:draw()
-    --[[ TEST TEST ]]--
-
-    -- debug rendering
-    --draw_debug()
-end
-
-function draw_board()
+function pong.draw_board()
     -- draw walls
     for x=1,#walls do
         if (walls[x].visible) then walls[x].drawf(walls[x]) end
@@ -580,49 +801,194 @@ function draw_board()
     draw_score()
 end
 
-function draw_score()
-    -- set enable, padding, wide, tall, inverted, dotty
-    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8 | 0x20 | 0x40)
-    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8)
-
-    --print(hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
-    --print(hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
-
-    -- clear all flags, including enable
-    --poke(0x5f58, 0)
-
-    print("\^p" .. hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
-    print("\^p" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
-end
-
-function draw_ball()
+function pong.draw_ball()
     rectfill(ball.x,ball.y,ball.x+ball.radius,ball.y+ball.radius,ball.color)
     --circfill(ball.x, ball.y, ball.radius, ball.color)
 end
-
-function draw_debug()
-    -- draw collsion box on wall
-    for x=1,#walls do 
-        if (walls[x].collision_debug_draw) then 
-            if (walls[x].collsionpt) then
-                rect(walls[x].collsionpt.x,walls[x].collsionpt.y,walls[x].collsionpt.x+2,walls[x].collsionpt.y+2,walls[x].collisiontextboxcolor)
-            end
-        end
-    end
-
-    -- debug prediction collision box drawing
-    if (predictwall.collsionpt) then
-        rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
-    end
-    if (player1.prediction) then
-        rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
-    end
-
-    rect(predictwall.x,predictwall.y,predictwall.x+predictwall.width,predictwall.y+predictwall.height,8)
-end
-
 -->8
 -- dialogue system
+dialogue = {}
+
+function dialogue:new(t,c)
+	local d = {
+		complete=false,
+		sections={},
+		index=1,
+		title=t,
+		color=c
+	}
+
+	-- todo: review best options for storing/loading dialogue
+	-- debug dialogue creation 
+	-- between 3-5 sections
+	-- between 5-8 phrases
+	for x=1,flr(rnd(3))+3 do 
+		local section = dialogue.create_section()
+		add(d.sections,section)
+		for y=1,flr(rnd(4))+5 do 
+			local phrase = dialogue.create_phrase('phrase '..y,7)
+			add(section.phrases,phrase)
+		end
+	end
+
+	setmetatable(d, {
+		__index = function(t, k)
+			if k == "section" then
+				return t.sections[t.index]
+			elseif k == "phrase" then
+				return t.section.phrases[t.section.index].text
+			else
+				return dialogue[k]
+			end
+		end
+	})
+	return d
+end
+
+function dialogue.create_section()
+    local s = {
+		phrases = {},
+		index=1
+    }
+    return s
+end
+
+function dialogue.create_phrase(t,c)
+    local p = {
+        text=t,
+        color=c
+    }
+    return p
+end
+
+function dialogue:load_next()
+	if self.complete then return end
+	add_timer(3, function() gm:event(game_manager.timerevents.timer_fired) end)
+end
+
+function dialogue:event(e)
+	if e == game_manager.timerevents.timer_fired then
+		-- increment phrase index
+		self.section.index += 1
+		if self.section.index > #self.section.phrases then
+			-- increment section index
+			self.index += 1
+			if self.index > #self.sections then
+				-- sequence complete, fire event for handing at game_manager
+				self.complete=true
+				gm:event(level.events.sequence_complete)
+			else
+				-- section complete, fire event for handling at level
+				gm:event(level.events.section_complete)
+			end
+		else
+			-- keep timer going and load next phrase
+			gm:event(level.events.phrase_complete)
+			self:load_next()
+		end
+	end
+end
+
+--[[ textbox ]]
+textbox = {}
+textbox.__index = textbox
+textbox.states = {closed=1,opening=2,open=3,closing=4}
+function textbox:new(xpos,ypos,w,h,c)
+	local tb = {
+		visible=false,
+		textvisible=false,
+		state=textbox.states.closed,
+		callback=nil,
+
+		-- UI box
+		rect = {
+			x0=xpos,
+			y0=ypos,
+			x1=xpos,
+			y1=ypos,
+			color=c
+		},	
+		width=w,
+		height=h,
+
+		-- Debug print
+		sectiontitle='no title',
+		sectionphrase='no phrase',
+		
+		-- Customizations
+		filled=true
+	}
+	setmetatable(tb,textbox)
+	return tb
+end
+
+function textbox:draw()
+	if self.visible then
+		local rect = self.rect
+		if self.filled then
+			rectfill(rect.x0, rect.y0, rect.x1, rect.y1, rect.color)
+		else
+			rect(rect.x0, rect.y0, rect.x1, rect.y1, rect.color)
+		end
+
+		-- Debug print
+		if self.textvisible then
+			print(self.sectiontitle,10,64,7)
+			print(self.sectionphrase,10,72,7)
+		end
+	end
+end
+
+function textbox:update()
+	-- animate
+	if self.state == textbox.states.opening then
+		local done=0
+		if self.rect.x1 < self.rect.x0 + self.width then
+			self.rect.x1 += 15
+		else done+=1
+		end
+		if self.rect.y1 < self.rect.y0 + self.height then
+			self.rect.y1 += 15
+		else done+=1
+		end
+
+		if done == 2 then
+			self.state = textbox.states.open
+			self:callback(level.events.tb_open)
+		end
+	end
+
+	if self.state == textbox.states.closing then
+		local done=0
+		if self.rect.x1 > self.rect.x0 then
+			self.rect.x1 -= 15
+		else done+=1
+		end
+		if self.rect.y1 > self.rect.y0 then
+			self.rect.y1 -= 15
+		else done+=1
+		end
+
+		if done == 2 then
+			self.state = textbox.states.closed
+			self.visible=false
+			self:callback(level.events.tb_closed)
+		end
+	end
+end
+
+function textbox:open(cb)
+	self.visible=true
+	self.textvisible=true
+	self.state=textbox.states.opening
+	self.callback=cb
+end
+
+function textbox:close(cb)
+	self.textvisible=false
+	self.state=textbox.states.closing
+	self.callback=cb
+end
 -->8
 -- rigid bodies
 __gfx__
