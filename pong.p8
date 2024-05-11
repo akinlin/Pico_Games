@@ -7,7 +7,7 @@ __lua__
     x migrate all game state into game_manager
     x create a pong object to contain the game
         x assign it to level
-    - synchronize the pong and dialogue objects
+    x synchronize the pong and dialogue objects
     x fix the game_manager update function
 ]]
 SCORE_TO_WIN = 11
@@ -186,7 +186,7 @@ end
 
 function level:load() 
 	self.textbox.sectiontitle=self.dialogue.title
-	self.textbox.sectionphrase=self.dialogue.phrase
+	self.textbox.sectionphrase=self.dialogue.phrase.text
 	self.textbox.rect.color=self.dialogue.color
 	self.textbox:open(function() gm:event(level.events.tb_open) end)
 
@@ -208,11 +208,11 @@ function level:event(e)
             self.textbox:close(function () gm:event(game_manager.events.level_complete) end)
         end,
         [level.events.section_complete] = function()
-            self.textbox.sectionphrase=self.dialogue.phrase
+            self.textbox.sectionphrase=self.dialogue.phrase.text
             self.textbox:close(function () gm:event(level.events.tb_closed) end)
         end,
         [level.events.phrase_complete] = function()
-            self.textbox.sectionphrase=self.dialogue.phrase
+            self.textbox.sectionphrase=self.dialogue.phrase.text
         end
     }
 
@@ -222,6 +222,15 @@ function level:event(e)
     else
         self.dialogue:event(e)
     end
+end
+
+function level:printdebugdialogue()
+    printh('--[[dialog info')
+    printh('# sections: '..#self.dialogue.sections)
+    printh('# phrases: '..#self.dialogue.sections[self.dialogue.index].phrases)
+    printh('section: '..self.dialogue.index)
+    printh('phrase: '..self.dialogue.sections[self.dialogue.index].index)
+    printh('--]]')
 end
 
 function level:input()
@@ -245,16 +254,16 @@ function _init()
     gm.screenwidth = 128
     gm.screenheight = 128
 	-- create textbox object
-	tb = textbox:new(0,64,65,5,12)
+	tb = textbox:new(0,120,128,2,12)
     -- create pong object
     p = pong:new()
     p:reset_game()
 	-- add 5 levels
-	gm:add_level(level:new(dialogue:new('denial',5,p),tb))
-	gm:add_level(level:new(dialogue:new('anger',8,p),tb))
-	gm:add_level(level:new(dialogue:new('bargining',9,p),tb))
-	gm:add_level(level:new(dialogue:new('depression',1,p),tb))
-	gm:add_level(level:new(dialogue:new('acceptance',3,p),tb))
+	gm:add_level(level:new(dialogues[1],tb,p))
+	gm:add_level(level:new(dialogues[2],tb,p))
+	gm:add_level(level:new(dialogues[3],tb,p))
+	gm:add_level(level:new(dialogues[4],tb,p))
+	gm:add_level(level:new(dialogues[5],tb,p))
 end
 
 --[[ UPDATE ]]
@@ -524,9 +533,9 @@ function pong.update_game_state()
             end
         end
         if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then 
-            gm:change_state(game_manager.states.gameover)
-            player1.visible = false
-            player2.visible = false
+            --gm:change_state(game_manager.states.gameover)
+            --player1.visible = false
+            --player2.visible = false
         end
         p:init_ball()
     end
@@ -809,7 +818,7 @@ end
 -- dialogue system
 dialogue = {}
 
-function dialogue:new(t,c)
+function dialogue:new(t,c,debug)
 	local d = {
 		complete=false,
 		sections={},
@@ -822,21 +831,23 @@ function dialogue:new(t,c)
 	-- debug dialogue creation 
 	-- between 3-5 sections
 	-- between 5-8 phrases
-	for x=1,flr(rnd(3))+3 do 
-		local section = dialogue.create_section()
-		add(d.sections,section)
-		for y=1,flr(rnd(4))+5 do 
-			local phrase = dialogue.create_phrase('phrase '..y,7)
-			add(section.phrases,phrase)
-		end
-	end
+    if debug then
+        for x=1,flr(rnd(3))+3 do 
+            local section = dialogue.create_section()
+            add(d.sections,section)
+            for y=1,flr(rnd(4))+5 do 
+                local phrase = dialogue.create_phrase('phrase '..y,7,3)
+                add(section.phrases,phrase)
+            end
+        end
+    end
 
 	setmetatable(d, {
 		__index = function(t, k)
 			if k == "section" then
 				return t.sections[t.index]
 			elseif k == "phrase" then
-				return t.section.phrases[t.section.index].text
+				return t.section.phrases[t.section.index]
 			else
 				return dialogue[k]
 			end
@@ -853,17 +864,18 @@ function dialogue.create_section()
     return s
 end
 
-function dialogue.create_phrase(t,c)
+function dialogue.create_phrase(t,c,d)
     local p = {
         text=t,
-        color=c
+        color=c,
+        duration=d
     }
     return p
 end
 
 function dialogue:load_next()
 	if self.complete then return end
-	add_timer(3, function() gm:event(game_manager.timerevents.timer_fired) end)
+	add_timer(self.phrase.duration, function() gm:event(game_manager.timerevents.timer_fired) end)
 end
 
 function dialogue:event(e)
@@ -922,6 +934,8 @@ function textbox:new(xpos,ypos,w,h,c)
 	return tb
 end
 
+blinkert=0
+blinkerc=16
 function textbox:draw()
 	if self.visible then
 		local rect = self.rect
@@ -933,8 +947,13 @@ function textbox:draw()
 
 		-- Debug print
 		if self.textvisible then
-			print(self.sectiontitle,10,64,7)
-			print(self.sectionphrase,10,72,7)
+            blinkert+=1
+            if blinkert > 7 then
+                blinkert = 0
+                if blinkerc == 16 then blinkerc = 32 else blinkerc = 16 end
+            end
+			--print(self.sectiontitle,10,64,7)
+			print(chr(62)..' '..self.sectionphrase..' '..chr(blinkerc),rect.x0+2,rect.y0+2,7)
 		end
 	end
 end
@@ -991,6 +1010,74 @@ function textbox:close(cb)
 end
 -->8
 -- rigid bodies
+-->8
+-- diaglogue
+dialogues={}
+
+function printdialogue(d,i)
+    printh('--dialogues['..i..']--')
+    for x=1,#d.sections do 
+        printh(' section['..x..']')
+        local section = d.sections[x]
+        for y=1,#section.phrases do 
+            printh(' phrase['..y..']='..section.phrases[y].text)
+        end
+    end
+end
+-- starts on player score at 2
+-- open textbox
+-- displays 'hello' for 6 seconds = 30*6=180
+-- close textbox
+-- wait 10 seconds
+-- open textbox
+-- display 'where is..' for 6 seconds = 30*6=180
+-- display 'are they..' for 8 seconds = 30*8=240
+-- close textbox
+-- end level
+
+local dialogue_denial = dialogue:new('denial',0,false)
+dialogues[1]=dialogue_denial
+local section = dialogue.create_section()
+add(dialogue_denial.sections,section)
+    add(section.phrases,dialogue.create_phrase('hello!?',7,180))
+local section2 = dialogue.create_section()
+add(dialogue_denial.sections,section2)
+    add(section2.phrases,dialogue.create_phrase('where is the second player?',7,180))
+    add(section2.phrases,dialogue.create_phrase('are they in the bathroom?',7,240))
+    add(section2.phrases,dialogue.create_phrase('maybe you should wait for them',7,50))
+    add(section2.phrases,dialogue.create_phrase('its their quarter too',7,100))
+local section3 = dialogue.create_section()
+add(dialogue_denial.sections,section3)
+    add(section3.phrases,dialogue.create_phrase('you know pong is a 2-player game right?',7,180))
+    add(section3.phrases,dialogue.create_phrase('is it?...',7,50))
+    add(section3.phrases,dialogue.create_phrase('that you..',7,50))
+    add(section3.phrases,dialogue.create_phrase('dont have any friends?',7,180))
+    add(section3.phrases,dialogue.create_phrase('i mean if so, thats fine',7,100))
+    add(section3.phrases,dialogue.create_phrase('i dont have any either',7,180))
+    add(section3.phrases,dialogue.create_phrase('i just...',7,60))
+    add(section3.phrases,dialogue.create_phrase('sorry what i mean is',7,30))
+    add(section3.phrases,dialogue.create_phrase('do you want some help?',7,100))
+    add(section3.phrases,dialogue.create_phrase('i could play',7,150))
+local section4 = dialogue.create_section()
+add(dialogue_denial.sections,section4)
+    add(section4.phrases,dialogue.create_phrase('kinda excited, actually',7,120))
+    add(section4.phrases,dialogue.create_phrase('never got to play before',7,180))
+    add(section4.phrases,dialogue.create_phrase('i bet i am really good',7,90))
+    add(section4.phrases,dialogue.create_phrase('like super good i bet',7,90))
+    add(section4.phrases,dialogue.create_phrase('brb, gonna jump in real quick',7,180))
+
+
+dialogues[2]=dialogue:new('anger',8,true)
+dialogues[3]=dialogue:new('bargining',9,true)
+dialogues[4]=dialogue:new('depression',1,true)
+dialogues[5]=dialogue:new('acceptance',3,true)
+
+printdialogue(dialogue_denial,1)
+printdialogue(dialogues[2],2)
+printdialogue(dialogues[3],3)
+printdialogue(dialogues[4],4)
+printdialogue(dialogues[5],5)
+
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
