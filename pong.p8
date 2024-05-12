@@ -4,11 +4,20 @@ __lua__
 
 --[[
     --Branch Goals--
-    x migrate all game state into game_manager
-    x create a pong object to contain the game
-        x assign it to level
-    x synchronize the pong and dialogue objects
-    x fix the game_manager update function
+    + set up dialogue triggers for game events
+        + a dialogue can be triggered by av event
+        + a phrase is triggered by a timer, never an event
+        + a dialog also provides an init and update function
+        + may need to look into providing a level load function, or a game_manager function
+            + for now abusing the fact that gm is global
+    + set up config for intro scene
+    - fix level overrun at end of game
+    + come up with a color pallete to match stage and dialogue mood (happy=yellow,sad=blue,confident=orange,inquisitive=green)
+    + ai is named com
+    + [needs work] work out a dialogue tree
+        - win = 'you win'
+        - lose = 'you lose'
+        - the base system was bulit on a single path, this may require deeper fixes
 ]]
 SCORE_TO_WIN = 11
 
@@ -124,15 +133,12 @@ function game_manager:update()
 	update_input()
 
 	if self.state == game_manager.states.level then
-        -- update pong
-        pong.update_game_state()
-        -- update dialogue
 		self.level:update()
     elseif gm.state == game_manager.states.gameover then
         update_gameover_state()
+        self.level.textbox:update()
     elseif gm.state == game_manager.states.intermission then
-        -- update pong
-        pong.update_game_state()
+        self.level.pong:update_game_state()
 	end
 end
 
@@ -154,6 +160,7 @@ function game_manager:draw()
         end,
 		[game_manager.states.gameover] = function()
 			print("game over",45,60)
+            self.level.textbox:draw()
 		end,
 		[game_manager.states.intermission] = function()
             -- pong
@@ -184,11 +191,13 @@ function level:new(d,tb,p)
 	return l
 end
 
-function level:load() 
+function level:load()
 	self.textbox.sectiontitle=self.dialogue.title
 	self.textbox.sectionphrase=self.dialogue.phrase.text
 	self.textbox.rect.color=self.dialogue.color
-	self.textbox:open(function() gm:event(level.events.tb_open) end)
+    -- dialog should decide when textbox is opened
+	--self.textbox:open(function() gm:event(level.events.tb_open) end)
+    self.dialogue:init()
 
     player1.visible = true
     player2.visible = true
@@ -202,7 +211,12 @@ function level:event(e)
         end,
         [level.events.tb_closed] = function()
             -- start section delay
-            add_timer(5,function () self.textbox:open(function() gm:event(level.events.tb_open) end) end)
+            if self.dialogue.continuesequence then
+                printh('continued sequence')
+                add_timer(50,function () self.textbox:open(function() gm:event(level.events.tb_open) end) end)
+            else
+                printh('stopped sequence')
+            end
         end,
         [level.events.sequence_complete] = function()
             self.textbox:close(function () gm:event(game_manager.events.level_complete) end)
@@ -240,6 +254,8 @@ end
 
 function level:update()
 	self.textbox:update()
+    self.dialogue:update()
+    self.pong:update_game_state()
 end
 
 function level:draw()
@@ -331,7 +347,9 @@ end
 
 -->8
 -- pong
-pong = {}
+pong = {
+    ai=false
+}
 pong.__index = pong
 function pong:new()
 	local p = {}
@@ -510,7 +528,7 @@ function pong:create_wall(xpos,ypos,w,h)
     return wall
 end
 
-function pong.update_game_state()
+function pong:update_game_state()
     pong.handle_game_input()
 
     dt = time() - timelast
@@ -522,7 +540,7 @@ function pong.update_game_state()
         pong.update_ball(dt)
     else
         if (ball.dx > 0) then 
-            hud.p1_score += 1
+            --hud.p1_score += 1
             if (player1.level < 17) then
                 player1.level += 1
             end
@@ -540,7 +558,7 @@ function pong.update_game_state()
         p:init_ball()
     end
 
-    pong.run_ai(dt, ball)
+    if self.ai then pong.run_ai(dt, ball) end
 end
 
 function pong.handle_game_input()
@@ -820,11 +838,13 @@ dialogue = {}
 
 function dialogue:new(t,c,debug)
 	local d = {
-		complete=false,
+		state=nil,
+        complete=false,
 		sections={},
 		index=1,
 		title=t,
-		color=c
+		color=c,
+        continuesequence=true
 	}
 
 	-- todo: review best options for storing/loading dialogue
@@ -1014,7 +1034,7 @@ end
 -- diaglogue
 dialogues={}
 
-function printdialogue(d,i)
+function dialogues.printdialogue(d,i)
     printh('--dialogues['..i..']--')
     for x=1,#d.sections do 
         printh(' section['..x..']')
@@ -1024,16 +1044,82 @@ function printdialogue(d,i)
         end
     end
 end
--- starts on player score at 2
--- open textbox
--- displays 'hello' for 6 seconds = 30*6=180
--- close textbox
--- wait 10 seconds
--- open textbox
--- display 'where is..' for 6 seconds = 30*6=180
--- display 'are they..' for 8 seconds = 30*8=240
--- close textbox
--- end level
+
+dialogue.states={observing=0,crusing=1,playing=2,finish=3}
+function dialogue:init()
+    self:changestate(dialogue.states.observing)
+end
+function dialogue:changestate(s)
+    local states = {
+        [dialogue.states.observing] = function()
+            -- level starts with ai turned off
+            gm.level.pong.ai=false;
+            -- no win/lose condition
+            -- has no dialogue options (delayed state until state change trigger)
+            -- dialog sequence starts after 2 points scored by player
+            printh('observing')
+        end,
+        [dialogue.states.crusing] = function()
+            -- start showing dialogue and turn on ai after 4th dialogue section
+            gm.level.textbox:open(function() gm:event(level.events.tb_open) end)
+            printh('crusing')
+        end,
+        [dialogue.states.playing] = function()
+            -- play until com or player wins
+            add_timer(50,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
+            self.continuesequence=false
+            gm.level.pong.ai=true;
+            hud.p1_score=0
+            hud.p2_score=0
+            printh('playing')
+        end,
+        [dialogue.states.finish] = function()
+            -- at end of game pick win or lose message
+            add_timer(50,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
+            self.continuesequence=false
+            gm:change_state(game_manager.states.gameover)
+            player1.visible = false
+            player2.visible = false
+            printh('finish')
+        end
+    }
+
+    local state = states[s]
+    if state then
+        state()
+        self.state=s
+    end
+end
+
+function dialogue:update()
+    local states = {
+        [dialogue.states.observing] = function()
+            -- check to see if the player has scored 2 points
+            -- if yes, change the state and start the dialogue sequence
+            if hud.p2_score > 1 then self:changestate(dialogue.states.crusing) end
+        end,
+        [dialogue.states.crusing] = function()
+            -- turn on ai after 4th dialogue section
+            if self.index > 4 then self:changestate(dialogue.states.playing) end
+        end,
+        [dialogue.states.playing] = function()
+            -- play until com or player wins
+            if hud.p1_score > 5 then self:changestate(dialogue.states.finish) end
+            if hud.p2_score > 5 then 
+                self.index+=1
+                self:changestate(dialogue.states.finish)
+            end
+        end,
+        [dialogue.states.finish] = function()
+             -- at end of game pick win or lose message
+        end
+    }
+
+    local state = states[self.state]
+    if state then
+        state()
+    end
+end
 
 local dialogue_denial = dialogue:new('denial',0,false)
 dialogues[1]=dialogue_denial
@@ -1049,34 +1135,44 @@ add(dialogue_denial.sections,section2)
 local section3 = dialogue.create_section()
 add(dialogue_denial.sections,section3)
     add(section3.phrases,dialogue.create_phrase('you know pong is a 2-player game right?',7,180))
-    add(section3.phrases,dialogue.create_phrase('is it?...',7,50))
-    add(section3.phrases,dialogue.create_phrase('that you..',7,50))
-    add(section3.phrases,dialogue.create_phrase('dont have any friends?',7,180))
-    add(section3.phrases,dialogue.create_phrase('i mean if so, thats fine',7,100))
-    add(section3.phrases,dialogue.create_phrase('i dont have any either',7,180))
-    add(section3.phrases,dialogue.create_phrase('i just...',7,60))
-    add(section3.phrases,dialogue.create_phrase('sorry what i mean is',7,30))
+    --add(section3.phrases,dialogue.create_phrase('is it?...',7,50))
+   -- add(section3.phrases,dialogue.create_phrase('that you..',7,50))
+    add(section3.phrases,dialogue.create_phrase('dont have any friends?',7,120))
+    --add(section3.phrases,dialogue.create_phrase('i mean if so, thats fine',7,90))
+   -- add(section3.phrases,dialogue.create_phrase('i dont have any either',7,180))
+   -- add(section3.phrases,dialogue.create_phrase('i just...',7,75))
+    add(section3.phrases,dialogue.create_phrase('sorry what i mean is',7,60))
     add(section3.phrases,dialogue.create_phrase('do you want some help?',7,100))
-    add(section3.phrases,dialogue.create_phrase('i could play',7,150))
+   -- add(section3.phrases,dialogue.create_phrase('i could play',7,150))
 local section4 = dialogue.create_section()
 add(dialogue_denial.sections,section4)
-    add(section4.phrases,dialogue.create_phrase('kinda excited, actually',7,120))
+  --  add(section4.phrases,dialogue.create_phrase('kinda excited, actually',7,120))
     add(section4.phrases,dialogue.create_phrase('never got to play before',7,180))
     add(section4.phrases,dialogue.create_phrase('i bet i am really good',7,90))
-    add(section4.phrases,dialogue.create_phrase('like super good i bet',7,90))
+  --  add(section4.phrases,dialogue.create_phrase('like super good, i bet',7,90))
     add(section4.phrases,dialogue.create_phrase('brb, gonna jump in real quick',7,180))
+local section5 = dialogue.create_section()
+    add(dialogue_denial.sections,section5)
+    add(section5.phrases,dialogue.create_phrase('there we go',7,120))
+    add(section5.phrases,dialogue.create_phrase('alright, this feels good',7,180))
+    add(section5.phrases,dialogue.create_phrase('a little trickier than I thought',7,90))
+    add(section5.phrases,dialogue.create_phrase('i will shut up now so we can play',7,90))
+    -- win
+local section6 = dialogue.create_section()
+add(dialogue_denial.sections,section6)
+    add(section6.phrases,dialogue.create_phrase('see, just as i said',7,120))
+    add(section6.phrases,dialogue.create_phrase('i am good at this game',7,120))
+    --lose
+local section7 = dialogue.create_section()
+add(dialogue_denial.sections,section7)
+    add(section7.phrases,dialogue.create_phrase('hmm, i lost',7,120))
+    add(section7.phrases,dialogue.create_phrase('thats not possible',7,120))
 
-
+-- and the rest
 dialogues[2]=dialogue:new('anger',8,true)
 dialogues[3]=dialogue:new('bargining',9,true)
 dialogues[4]=dialogue:new('depression',1,true)
 dialogues[5]=dialogue:new('acceptance',3,true)
-
-printdialogue(dialogue_denial,1)
-printdialogue(dialogues[2],2)
-printdialogue(dialogues[3],3)
-printdialogue(dialogues[4],4)
-printdialogue(dialogues[5],5)
 
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
