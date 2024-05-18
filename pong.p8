@@ -4,20 +4,7 @@ __lua__
 
 --[[
     --Branch Goals--
-    + set up dialogue triggers for game events
-        + a dialogue can be triggered by av event
-        + a phrase is triggered by a timer, never an event
-        + a dialog also provides an init and update function
-        + may need to look into providing a level load function, or a game_manager function
-            + for now abusing the fact that gm is global
-    + set up config for intro scene
-    - fix level overrun at end of game
-    + come up with a color pallete to match stage and dialogue mood (happy=yellow,sad=blue,confident=orange,inquisitive=green)
-    + ai is named com
-    + [needs work] work out a dialogue tree
-        - win = 'you win'
-        - lose = 'you lose'
-        - the base system was bulit on a single path, this may require deeper fixes
+   
 ]]
 SCORE_TO_WIN = 11
 
@@ -540,7 +527,7 @@ function pong:update_game_state()
         pong.update_ball(dt)
     else
         if (ball.dx > 0) then 
-            --hud.p1_score += 1
+            hud.p1_score += 1
             if (player1.level < 17) then
                 player1.level += 1
             end
