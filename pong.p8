@@ -3,7 +3,20 @@ version 41
 __lua__
 
 --[[
-    --Branch Goals--
+    --PR Goals--
+    Take a string of any length
+    Take a defined rect space to show the text within
+    warp the text if it prints beyond the edge of the rect
+    grow the rect height when text warps
+
+    load a single dialogue and not the pong game
+    set up a key press trigger to advance between dialogues for debugging
+
+    Need to know
+    - width of rect
+    - length of text
+
+
    
 ]]
 SCORE_TO_WIN = 11
@@ -1032,13 +1045,28 @@ function dialogues.printdialogue(d,i)
     end
 end
 
-dialogue.states={observing=0,crusing=1,playing=2,finish=3}
-function dialogue:init()
-    self:changestate(dialogue.states.observing)
+-- placeholder methods to be replaced with the level customizations
+function dialogue:init() end
+function dialogue:changestate() end
+function dialogue:update() end
+dialogue.states={}
+
+function dialogue:loadstatemachine(i,cs,u,s)
+    self.init = i
+    self.changestate = cs
+    self.update = u
+    self.states = s
 end
-function dialogue:changestate(s)
+
+local dialogue_denial_states={observing=0,crusing=1,playing=2,finish=3}
+local dialogue_denial_init = function(self)
+    self:changestate(self.states.observing)
+end
+
+--[[ testing swapping out the change state function ]]
+dialogue_denial_changestate = function(self,s)
     local states = {
-        [dialogue.states.observing] = function()
+        [self.states.observing] = function()
             -- level starts with ai turned off
             gm.level.pong.ai=false;
             -- no win/lose condition
@@ -1046,12 +1074,12 @@ function dialogue:changestate(s)
             -- dialog sequence starts after 2 points scored by player
             printh('observing')
         end,
-        [dialogue.states.crusing] = function()
+        [self.states.crusing] = function()
             -- start showing dialogue and turn on ai after 4th dialogue section
             gm.level.textbox:open(function() gm:event(level.events.tb_open) end)
             printh('crusing')
         end,
-        [dialogue.states.playing] = function()
+        [self.states.playing] = function()
             -- play until com or player wins
             add_timer(50,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
             self.continuesequence=false
@@ -1060,7 +1088,7 @@ function dialogue:changestate(s)
             hud.p2_score=0
             printh('playing')
         end,
-        [dialogue.states.finish] = function()
+        [self.states.finish] = function()
             -- at end of game pick win or lose message
             add_timer(50,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
             self.continuesequence=false
@@ -1078,26 +1106,26 @@ function dialogue:changestate(s)
     end
 end
 
-function dialogue:update()
+dialogue_denial_update = function(self)
     local states = {
-        [dialogue.states.observing] = function()
+        [self.states.observing] = function()
             -- check to see if the player has scored 2 points
             -- if yes, change the state and start the dialogue sequence
-            if hud.p2_score > 1 then self:changestate(dialogue.states.crusing) end
+            if hud.p2_score > 1 then self:changestate(self.states.crusing) end
         end,
-        [dialogue.states.crusing] = function()
+        [self.states.crusing] = function()
             -- turn on ai after 4th dialogue section
-            if self.index > 4 then self:changestate(dialogue.states.playing) end
+            if self.index > 4 then self:changestate(self.states.playing) end
         end,
-        [dialogue.states.playing] = function()
+        [self.states.playing] = function()
             -- play until com or player wins
-            if hud.p1_score > 5 then self:changestate(dialogue.states.finish) end
+            if hud.p1_score > 5 then self:changestate(self.states.finish) end
             if hud.p2_score > 5 then 
                 self.index+=1
-                self:changestate(dialogue.states.finish)
+                self:changestate(self.states.finish)
             end
         end,
-        [dialogue.states.finish] = function()
+        [self.states.finish] = function()
              -- at end of game pick win or lose message
         end
     }
@@ -1108,7 +1136,11 @@ function dialogue:update()
     end
 end
 
+local dialogue_test = dialogue:new('testbox',0,false)
+
+
 local dialogue_denial = dialogue:new('denial',0,false)
+dialogue_denial:loadstatemachine(dialogue_denial_init,dialogue_denial_changestate,dialogue_denial_update,dialogue_denial_states)
 dialogues[1]=dialogue_denial
 local section = dialogue.create_section()
 add(dialogue_denial.sections,section)
