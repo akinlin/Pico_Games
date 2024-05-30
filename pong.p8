@@ -16,11 +16,11 @@ __lua__
     - width of rect
     - length of text
 
-
+    SWITCHING TO game_master BRANCH TO FIX THE GAME LOOP FLOW
+    WILL NEED TO MERGE FIXES BACK BEFORE CONTINUING PROGRESS ON THIS BRANCH
    
 ]]
 SCORE_TO_WIN = 11
-
 PADDLE_SPEED = 4
 
 -- [[ HELPER FUNCTIONS ]]
@@ -83,6 +83,7 @@ end
 
 function game_manager:change_state(s)
 	self.state = s
+    printh("state="..s)
 end
 
 function game_manager:add_level(l)
@@ -92,8 +93,12 @@ end
 function game_manager:event(e)
 	local events = {
 		[game_manager.events.level_complete] = function()
-			self.level_index += 1
-			self:change_state(game_manager.states.intermission)
+            if self.level_index+1 <= #self.levels then
+                self.level_index += 1
+			    self:change_state(game_manager.states.intermission)
+            else
+                self:change_state(game_manager.states.gameover)
+            end
         end
 	}
 	
@@ -116,7 +121,13 @@ function game_manager:input(e)
 					-- if no levels loaded exit to game over
 					self:change_state(game_manager.states.gameover)
 				end
-			end
+			elseif self.state == game_manager.states.gameover then
+                -- TODO: reset the index to "restart" the game for now
+                --self.level_index = 1
+                --self:change_state(game_manager.states.level)
+                --self.level.diaglogue:reset()
+                --self.level:load()
+            end
         end
 	}
 
@@ -135,7 +146,7 @@ function game_manager:update()
 	if self.state == game_manager.states.level then
 		self.level:update()
     elseif gm.state == game_manager.states.gameover then
-        update_gameover_state()
+        --update_gameover_state()
         self.level.textbox:update()
     elseif gm.state == game_manager.states.intermission then
         self.level.pong:update_game_state()
@@ -275,11 +286,17 @@ function _init()
     p = pong:new()
     p:reset_game()
 	-- add 5 levels
+    --[[
+    -- debug add array of levels, TODO: should probably always just load the array
 	gm:add_level(level:new(dialogues[1],tb,p))
 	gm:add_level(level:new(dialogues[2],tb,p))
 	gm:add_level(level:new(dialogues[3],tb,p))
 	gm:add_level(level:new(dialogues[4],tb,p))
 	gm:add_level(level:new(dialogues[5],tb,p))
+    ]]
+    for x=1, #dialogues do
+        gm:add_level(level:new(dialogues[x],tb,p))
+    end
 end
 
 --[[ UPDATE ]]
@@ -293,11 +310,13 @@ function update_input()
 	end
 end
 
+--[[ Handle this with the central input handler
 function update_gameover_state()
     if btnp(❎) then
         p:reset_game()
     end
 end
+]]
 
 --[[ DRAW ]]
 function _draw()
@@ -921,6 +940,13 @@ function dialogue:event(e)
 	end
 end
 
+function dialogue:reset()
+    self.state=nil
+    self.complete=false
+    self.index=1
+    self.continuesequence=true
+end
+
 --[[ textbox ]]
 textbox = {}
 textbox.__index = textbox
@@ -1052,10 +1078,10 @@ function dialogue:update() end
 dialogue.states={}
 
 function dialogue:loadstatemachine(i,cs,u,s)
-    self.init = i
-    self.changestate = cs
-    self.update = u
-    self.states = s
+    if i then self.init = i end
+    if cs then self.changestate = cs end
+    if u then self.update = u end
+    if s then self.states = s end
 end
 
 local dialogue_denial_states={observing=0,crusing=1,playing=2,finish=3}
@@ -1119,11 +1145,13 @@ dialogue_denial_update = function(self)
         end,
         [self.states.playing] = function()
             -- play until com or player wins
-            if hud.p1_score > 5 then self:changestate(self.states.finish) end
+            if hud.p1_score > 5 or hud.p2.p2_score > 5 then self:changestate(self.states.finish) end
+            --[[
             if hud.p2_score > 5 then 
                 self.index+=1
                 self:changestate(self.states.finish)
             end
+            ]]
         end,
         [self.states.finish] = function()
              -- at end of game pick win or lose message
@@ -1136,12 +1164,19 @@ dialogue_denial_update = function(self)
     end
 end
 
-local dialogue_test = dialogue:new('testbox',0,false)
+dialogue_test_update = function(self)
+    if btnp(❎) then
+	    gm.level.textbox:open(function() gm:event(level.events.tb_open) end)
+	end
+end
+
+local dialogue_test = dialogue:new('testbox',0,true)
+dialogue_test:loadstatemachine(nil,nil,dialogue_test_update,nil)
+add(dialogues,dialogue_test)
 
 
 local dialogue_denial = dialogue:new('denial',0,false)
 dialogue_denial:loadstatemachine(dialogue_denial_init,dialogue_denial_changestate,dialogue_denial_update,dialogue_denial_states)
-dialogues[1]=dialogue_denial
 local section = dialogue.create_section()
 add(dialogue_denial.sections,section)
     add(section.phrases,dialogue.create_phrase('hello!?',7,180))
@@ -1187,11 +1222,12 @@ add(dialogue_denial.sections,section7)
     add(section7.phrases,dialogue.create_phrase('hmm, i lost',7,120))
     add(section7.phrases,dialogue.create_phrase('thats not possible',7,120))
 
+--add(dialogues,dialogue_denial)
 -- and the rest
-dialogues[2]=dialogue:new('anger',8,true)
-dialogues[3]=dialogue:new('bargining',9,true)
-dialogues[4]=dialogue:new('depression',1,true)
-dialogues[5]=dialogue:new('acceptance',3,true)
+--add(dialogues,dialogue:new('anger',8,true))
+--add(dialogues,dialogue:new('bargining',9,true))
+--add(dialogues,dialogue:new('depression',1,true))
+--add(dialogues,dialogue:new('acceptance',3,true))
 
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
