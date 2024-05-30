@@ -4,21 +4,28 @@ __lua__
 
 --[[
     --PR Goals--
-    Take a string of any length
-    Take a defined rect space to show the text within
-    warp the text if it prints beyond the edge of the rect
-    grow the rect height when text warps
+    Need to fix the game flow
+    - init 
+        - create a reset function 
+        - game_manager handles inits, resets for all objects
+        - game_manager single instance
+        - level multiple instances
+         - pong object per level
+         - textbox object per level
+         - dialogue object per level
+          - section multiple instances
+          - phrase multiple instances
+    - update
+        - game_manager controls update logic between screens and states (level, menu)
+        - every obejct handles their own update logic function
+        - level manages update handling between pong, textbox, dialogue
+        - input event capturing is centralized and passed to the game_manager
+    - draw
+        - game_manager handles all draw requests outside of debug draw
+        - level handles drawing of textbox, pong, dialogue
 
-    load a single dialogue and not the pong game
-    set up a key press trigger to advance between dialogues for debugging
-
-    Need to know
-    - width of rect
-    - length of text
-
-    SWITCHING TO game_master BRANCH TO FIX THE GAME LOOP FLOW
-    WILL NEED TO MERGE FIXES BACK BEFORE CONTINUING PROGRESS ON THIS BRANCH
-   
+    Complete rebuild down to the studs
+    Add back more advanced features only after finalizing the basic game flow described above
 ]]
 SCORE_TO_WIN = 11
 PADDLE_SPEED = 4
@@ -60,30 +67,42 @@ end
 game_manager = {}
 -- states and events
 game_manager.states = {title=0,menu=1,options=2,level=3,gameover=4,intermission=5}
+game_manager.states.size = 5
 game_manager.events = {level_complete=10}
 game_manager.inputevents = {key_pressed=20}
 game_manager.timerevents = {timer_fired=30}
 function game_manager:new()
-	local gm = {
-		state = game_manager.states.menu,
-		levels = {},
-		level_index = 1
-	}
+    printh('game_manager:new')
+	local gm = {}
 	setmetatable(gm, {
 		__index = function(t, k)
 			if k == "level" then
-				return t.levels[t.level_index]
+				if t.levels and t.level_index then
+					return t.levels[t.level_index]
+				else
+					return nil
+                end
 			else
 				return game_manager[k]
 			end
 		end
 	})
+    gm:reset()
 	return gm
+end
+
+function game_manager:reset()
+	self.state = game_manager.states.title
+    self.levels = {}
+    self.level_index = 1
+    self.screenwidth = 128
+    self.screenheight = 128
+    printh('game_manager:reset')
 end
 
 function game_manager:change_state(s)
 	self.state = s
-    printh("state="..s)
+    printh('game_manager:change_state: '..s)
 end
 
 function game_manager:add_level(l)
@@ -93,12 +112,15 @@ end
 function game_manager:event(e)
 	local events = {
 		[game_manager.events.level_complete] = function()
+            printh('game_manager:event: level_complete')
+            --[[
             if self.level_index+1 <= #self.levels then
                 self.level_index += 1
 			    self:change_state(game_manager.states.intermission)
             else
                 self:change_state(game_manager.states.gameover)
             end
+            ]]
         end
 	}
 	
@@ -113,6 +135,15 @@ end
 function game_manager:input(e)
 	local inputevents = {
 		[game_manager.inputevents.key_pressed] = function()
+            printh('game_manager:input: key_pressed')
+            printh('self.state: '..self.state)
+            printh('max states: '..game_manager.states.size)
+            if self.state < game_manager.states.size then
+                self:change_state(self.state+1)
+            else
+                self:reset()
+            end
+            --[[
 			if self.state == game_manager.states.menu or game_manager.states.intermission then
 				if self.level_index <= #self.levels then
 					self:change_state(game_manager.states.level)
@@ -128,6 +159,7 @@ function game_manager:input(e)
                 --self.level.diaglogue:reset()
                 --self.level:load()
             end
+            ]]
         end
 	}
 
@@ -140,21 +172,44 @@ function game_manager:input(e)
 end
 
 function game_manager:update() 
-    update_timers()
-	update_input()
+    --update_timers()
 
-	if self.state == game_manager.states.level then
-		self.level:update()
-    elseif gm.state == game_manager.states.gameover then
-        --update_gameover_state()
-        self.level.textbox:update()
-    elseif gm.state == game_manager.states.intermission then
-        self.level.pong:update_game_state()
-	end
+    --[[
+    local states = {
+		[game_manager.states.title] = function()
+			printh('game_manager update title')
+        end,
+		[game_manager.states.menu] = function()
+			printh('game_manager update menu')
+        end,
+		[game_manager.states.options] = function()
+			printh('game_manager update options')
+        end,
+        [game_manager.states.level] = function()
+            printh('game_manager update level')
+            --self.level:update()
+        end,
+		[game_manager.states.gameover] = function()
+			printh('game_manager update gameover')
+            --self.level.textbox:update()
+		end,
+		[game_manager.states.intermission] = function()
+            printh('game_manager update intermission')
+            --self.level.pong:update_game_state()
+		end
+	}
+
+	local update = states[self.state]
+    if update then
+        update()
+    else
+        printh('no update state for '..self.state)
+    end
+    ]]
 end
 
 function game_manager:draw()
-    pong.draw_board()
+    --pong.draw_board()
 
 	local states = {
 		[game_manager.states.title] = function()
@@ -167,15 +222,16 @@ function game_manager:draw()
 			print("options",44,60)
         end,
         [game_manager.states.level] = function()
-            self.level:draw()
+            print("level",44,60)
+            --self.level:draw()
         end,
 		[game_manager.states.gameover] = function()
 			print("game over",45,60)
-            self.level.textbox:draw()
+            --self.level.textbox:draw()
 		end,
 		[game_manager.states.intermission] = function()
             -- pong
-            pong.draw_ball()
+            --pong.draw_ball()
             print("press ❎ to continue",32,64,7)
 		end
 	}
@@ -184,19 +240,73 @@ function game_manager:draw()
     if state then
         state()
     else
-        printh('not draw state for '..self.state)
+        printh('no draw state for '..self.state)
     end
 end
 
--- [[ Level ]]
+--[[ INIT ]]
+function _init()
+    -- creates the global gm object
+	gm = game_manager:new()
+    -- add levels 
+    for x=1, #dialogues do
+        gm:add_level(level:new(dialogues[x]))
+    end
+end
+
+--[[ UPDATE ]]
+function _update()
+    update_input()
+	gm:update()
+end
+
+function update_input()
+	if btnp(❎) then
+		gm:input(game_manager.inputevents.key_pressed)
+	end
+end
+
+--[[ DRAW ]]
+function _draw()
+	cls(0)
+
+    gm:draw()
+
+    -- debug rendering
+    --draw_debug()
+end
+
+function draw_debug()
+    -- draw collsion box on wall
+    for x=1,#walls do 
+        if (walls[x].collision_debug_draw) then 
+            if (walls[x].collsionpt) then
+                rect(walls[x].collsionpt.x,walls[x].collsionpt.y,walls[x].collsionpt.x+2,walls[x].collsionpt.y+2,walls[x].collisiontextboxcolor)
+            end
+        end
+    end
+
+    -- debug prediction collision box drawing
+    if (predictwall.collsionpt) then
+        rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
+    end
+    if (player1.prediction) then
+        rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
+    end
+
+    rect(predictwall.x,predictwall.y,predictwall.x+predictwall.width,predictwall.y+predictwall.height,8)
+end
+
+-->8
+-- level
 level = {}
 level.__index = level
 level.events = {phrase_complete=40,section_complete=41,sequence_complete=42,level_complete=43,tb_open=44,tb_closed=45}
 function level:new(d,tb,p)
-	local l = {
+    local l = {
 		dialogue=d,
-		textbox=tb,
-		pong=p
+		textbox=tb or textbox:new(0,120,128,2,12),
+		pong=p or pong:new()
 	}
 	setmetatable(l,level)
 	return l
@@ -273,97 +383,6 @@ function level:draw()
     pong.draw_ball()
 	tb:draw()
 end
-
---[[ INIT ]]
-function _init()
-    -- creates the global gm object
-	gm = game_manager:new()
-    gm.screenwidth = 128
-    gm.screenheight = 128
-	-- create textbox object
-	tb = textbox:new(0,120,128,2,12)
-    -- create pong object
-    p = pong:new()
-    p:reset_game()
-	-- add 5 levels
-    --[[
-    -- debug add array of levels, TODO: should probably always just load the array
-	gm:add_level(level:new(dialogues[1],tb,p))
-	gm:add_level(level:new(dialogues[2],tb,p))
-	gm:add_level(level:new(dialogues[3],tb,p))
-	gm:add_level(level:new(dialogues[4],tb,p))
-	gm:add_level(level:new(dialogues[5],tb,p))
-    ]]
-    for x=1, #dialogues do
-        gm:add_level(level:new(dialogues[x],tb,p))
-    end
-end
-
---[[ UPDATE ]]
-function _update()
-	gm:update()
-end
-
-function update_input()
-	if btnp(❎) then
-		gm:input(game_manager.inputevents.key_pressed)
-	end
-end
-
---[[ Handle this with the central input handler
-function update_gameover_state()
-    if btnp(❎) then
-        p:reset_game()
-    end
-end
-]]
-
---[[ DRAW ]]
-function _draw()
-	cls(0)
-
-    gm:draw()
-
-    -- debug rendering
-    --draw_debug()
-end
-
-function draw_score()
-    -- set enable, padding, wide, tall, inverted, dotty
-    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8 | 0x20 | 0x40)
-    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8)
-
-    --print(hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
-    --print(hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
-
-    -- clear all flags, including enable
-    --poke(0x5f58, 0)
-
-    print("\^p" .. hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
-    print("\^p" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
-end
-
-function draw_debug()
-    -- draw collsion box on wall
-    for x=1,#walls do 
-        if (walls[x].collision_debug_draw) then 
-            if (walls[x].collsionpt) then
-                rect(walls[x].collsionpt.x,walls[x].collsionpt.y,walls[x].collsionpt.x+2,walls[x].collsionpt.y+2,walls[x].collisiontextboxcolor)
-            end
-        end
-    end
-
-    -- debug prediction collision box drawing
-    if (predictwall.collsionpt) then
-        rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
-    end
-    if (player1.prediction) then
-        rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
-    end
-
-    rect(predictwall.x,predictwall.y,predictwall.x+predictwall.width,predictwall.y+predictwall.height,8)
-end
-
 -->8
 -- pong
 pong = {
@@ -844,7 +863,22 @@ function pong.draw_board()
     net.drawnet()
 
     -- hud
-    draw_score()
+    pong.draw_score()
+end
+
+function pong.draw_score()
+    -- set enable, padding, wide, tall, inverted, dotty
+    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8 | 0x20 | 0x40)
+    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8)
+
+    --print(hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
+    --print(hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
+
+    -- clear all flags, including enable
+    --poke(0x5f58, 0)
+
+    print("\^p" .. hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
+    print("\^p" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
 end
 
 function pong.draw_ball()
@@ -853,6 +887,7 @@ function pong.draw_ball()
 end
 -->8
 -- dialogue system
+--[[ dialogue ]]
 dialogue = {}
 
 function dialogue:new(t,c,debug)
@@ -894,6 +929,19 @@ function dialogue:new(t,c,debug)
 	})
 	return d
 end
+
+function dialogue:loadstatemachine(i,cs,u,s)
+    if i then self.init = i end
+    if cs then self.changestate = cs end
+    if u then self.update = u end
+    if s then self.states = s end
+end
+
+-- placeholder methods to be replaced with the level customizations
+function dialogue:init() end
+function dialogue:changestate() end
+function dialogue:update() end
+dialogue.states={}
 
 function dialogue.create_section()
     local s = {
@@ -946,8 +994,69 @@ function dialogue:reset()
     self.index=1
     self.continuesequence=true
 end
+--[[ dialogues ]]
+dialogues={}
 
---[[ textbox ]]
+function dialogues.printdialogue(d,i)
+    printh('--dialogues['..i..']--')
+    for x=1,#d.sections do 
+        printh(' section['..x..']')
+        local section = d.sections[x]
+        for y=1,#section.phrases do 
+            printh(' phrase['..y..']='..section.phrases[y].text)
+        end
+    end
+end
+
+local dialogue_test_states={beginning=0,middle=1,ending=2}
+local dialogue_test_init = function(self)
+    self:changestate(self.states.beginning)
+end
+
+local dialogue_test_changestate = function(self,s)
+    local states = {
+        [self.states.beginning] = function()
+            printh('dialogue state change: beginning')
+        end,
+        [self.states.middle] = function()
+            printh('dialogue state change: middle')
+        end,
+        [self.states.ending] = function()
+            printh('dialogue state change: ending')
+        end
+    }
+
+    local state = states[s]
+    if state then
+        state()
+        self.state=s
+    end
+end
+
+local dialogue_test_update = function(self)
+    local states = {
+        [self.states.beginning] = function()
+            printh('dialogue update: beginning')
+        end,
+        [self.states.middle] = function()
+            printh('dialogue update: middle')
+        end,
+        [self.states.ending] = function()
+            printh('dialogue update: ending')
+        end
+    }
+
+    local state = states[self.state]
+    if state then
+        state()
+    end
+end
+
+local dialogue_test = dialogue:new('testbox',0,true)
+dialogue_test:loadstatemachine(dialogue_test_init,dialogue_test_changestate,dialogue_test_update,dialogue_test_states)
+add(dialogues,dialogue_test)
+-->8
+-- textbox
 textbox = {}
 textbox.__index = textbox
 textbox.states = {closed=1,opening=2,open=3,closing=4}
@@ -1056,178 +1165,7 @@ function textbox:close(cb)
 end
 -->8
 -- rigid bodies
--->8
--- diaglogue
-dialogues={}
 
-function dialogues.printdialogue(d,i)
-    printh('--dialogues['..i..']--')
-    for x=1,#d.sections do 
-        printh(' section['..x..']')
-        local section = d.sections[x]
-        for y=1,#section.phrases do 
-            printh(' phrase['..y..']='..section.phrases[y].text)
-        end
-    end
-end
-
--- placeholder methods to be replaced with the level customizations
-function dialogue:init() end
-function dialogue:changestate() end
-function dialogue:update() end
-dialogue.states={}
-
-function dialogue:loadstatemachine(i,cs,u,s)
-    if i then self.init = i end
-    if cs then self.changestate = cs end
-    if u then self.update = u end
-    if s then self.states = s end
-end
-
-local dialogue_denial_states={observing=0,crusing=1,playing=2,finish=3}
-local dialogue_denial_init = function(self)
-    self:changestate(self.states.observing)
-end
-
---[[ testing swapping out the change state function ]]
-dialogue_denial_changestate = function(self,s)
-    local states = {
-        [self.states.observing] = function()
-            -- level starts with ai turned off
-            gm.level.pong.ai=false;
-            -- no win/lose condition
-            -- has no dialogue options (delayed state until state change trigger)
-            -- dialog sequence starts after 2 points scored by player
-            printh('observing')
-        end,
-        [self.states.crusing] = function()
-            -- start showing dialogue and turn on ai after 4th dialogue section
-            gm.level.textbox:open(function() gm:event(level.events.tb_open) end)
-            printh('crusing')
-        end,
-        [self.states.playing] = function()
-            -- play until com or player wins
-            add_timer(50,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
-            self.continuesequence=false
-            gm.level.pong.ai=true;
-            hud.p1_score=0
-            hud.p2_score=0
-            printh('playing')
-        end,
-        [self.states.finish] = function()
-            -- at end of game pick win or lose message
-            add_timer(50,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
-            self.continuesequence=false
-            gm:change_state(game_manager.states.gameover)
-            player1.visible = false
-            player2.visible = false
-            printh('finish')
-        end
-    }
-
-    local state = states[s]
-    if state then
-        state()
-        self.state=s
-    end
-end
-
-dialogue_denial_update = function(self)
-    local states = {
-        [self.states.observing] = function()
-            -- check to see if the player has scored 2 points
-            -- if yes, change the state and start the dialogue sequence
-            if hud.p2_score > 1 then self:changestate(self.states.crusing) end
-        end,
-        [self.states.crusing] = function()
-            -- turn on ai after 4th dialogue section
-            if self.index > 4 then self:changestate(self.states.playing) end
-        end,
-        [self.states.playing] = function()
-            -- play until com or player wins
-            if hud.p1_score > 5 or hud.p2.p2_score > 5 then self:changestate(self.states.finish) end
-            --[[
-            if hud.p2_score > 5 then 
-                self.index+=1
-                self:changestate(self.states.finish)
-            end
-            ]]
-        end,
-        [self.states.finish] = function()
-             -- at end of game pick win or lose message
-        end
-    }
-
-    local state = states[self.state]
-    if state then
-        state()
-    end
-end
-
-dialogue_test_update = function(self)
-    if btnp(❎) then
-	    gm.level.textbox:open(function() gm:event(level.events.tb_open) end)
-	end
-end
-
-local dialogue_test = dialogue:new('testbox',0,true)
-dialogue_test:loadstatemachine(nil,nil,dialogue_test_update,nil)
-add(dialogues,dialogue_test)
-
-
-local dialogue_denial = dialogue:new('denial',0,false)
-dialogue_denial:loadstatemachine(dialogue_denial_init,dialogue_denial_changestate,dialogue_denial_update,dialogue_denial_states)
-local section = dialogue.create_section()
-add(dialogue_denial.sections,section)
-    add(section.phrases,dialogue.create_phrase('hello!?',7,180))
-local section2 = dialogue.create_section()
-add(dialogue_denial.sections,section2)
-    add(section2.phrases,dialogue.create_phrase('where is the second player?',7,180))
-    add(section2.phrases,dialogue.create_phrase('are they in the bathroom?',7,240))
-    add(section2.phrases,dialogue.create_phrase('maybe you should wait for them',7,50))
-    add(section2.phrases,dialogue.create_phrase('its their quarter too',7,100))
-local section3 = dialogue.create_section()
-add(dialogue_denial.sections,section3)
-    add(section3.phrases,dialogue.create_phrase('you know pong is a 2-player game right?',7,180))
-    --add(section3.phrases,dialogue.create_phrase('is it?...',7,50))
-   -- add(section3.phrases,dialogue.create_phrase('that you..',7,50))
-    add(section3.phrases,dialogue.create_phrase('dont have any friends?',7,120))
-    --add(section3.phrases,dialogue.create_phrase('i mean if so, thats fine',7,90))
-   -- add(section3.phrases,dialogue.create_phrase('i dont have any either',7,180))
-   -- add(section3.phrases,dialogue.create_phrase('i just...',7,75))
-    add(section3.phrases,dialogue.create_phrase('sorry what i mean is',7,60))
-    add(section3.phrases,dialogue.create_phrase('do you want some help?',7,100))
-   -- add(section3.phrases,dialogue.create_phrase('i could play',7,150))
-local section4 = dialogue.create_section()
-add(dialogue_denial.sections,section4)
-  --  add(section4.phrases,dialogue.create_phrase('kinda excited, actually',7,120))
-    add(section4.phrases,dialogue.create_phrase('never got to play before',7,180))
-    add(section4.phrases,dialogue.create_phrase('i bet i am really good',7,90))
-  --  add(section4.phrases,dialogue.create_phrase('like super good, i bet',7,90))
-    add(section4.phrases,dialogue.create_phrase('brb, gonna jump in real quick',7,180))
-local section5 = dialogue.create_section()
-    add(dialogue_denial.sections,section5)
-    add(section5.phrases,dialogue.create_phrase('there we go',7,120))
-    add(section5.phrases,dialogue.create_phrase('alright, this feels good',7,180))
-    add(section5.phrases,dialogue.create_phrase('a little trickier than I thought',7,90))
-    add(section5.phrases,dialogue.create_phrase('i will shut up now so we can play',7,90))
-    -- win
-local section6 = dialogue.create_section()
-add(dialogue_denial.sections,section6)
-    add(section6.phrases,dialogue.create_phrase('see, just as i said',7,120))
-    add(section6.phrases,dialogue.create_phrase('i am good at this game',7,120))
-    --lose
-local section7 = dialogue.create_section()
-add(dialogue_denial.sections,section7)
-    add(section7.phrases,dialogue.create_phrase('hmm, i lost',7,120))
-    add(section7.phrases,dialogue.create_phrase('thats not possible',7,120))
-
---add(dialogues,dialogue_denial)
--- and the rest
---add(dialogues,dialogue:new('anger',8,true))
---add(dialogues,dialogue:new('bargining',9,true))
---add(dialogues,dialogue:new('depression',1,true))
---add(dialogues,dialogue:new('acceptance',3,true))
 
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
