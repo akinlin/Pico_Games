@@ -79,6 +79,13 @@ swept collision ~20,000 (~14%); drawing 40 balls ~1,500 (~1%); scanlines ~0; pho
 paddle costs; the four acts that do run phosphor land near **27%** against a single ball.
 Both are estimates from published per-operation costs, not measurements.
 
+**The cart carries no comments.** Comments are free against the token budget — the
+manual's *Code Limits* excludes them, along with commas, periods, `local`s, semicolons
+and `end`s — but they count in full against the 65,535 characters, which is the budget
+shared with dialogue. They cost 5,871 characters (9% of the total) before being stripped.
+Rationale belongs in `docs/`, in this file, or in the commit message; not in `pong.p8`.
+The `-->8` tab separators look like comments and are not — they are structural.
+
 Engine footprint is a standing priority. When two implementations are equally correct,
 take the smaller one. Bargaining's pre-match choice system is the one sanctioned
 exception — it is expected to be the largest act-specific chunk of code in the cart.
