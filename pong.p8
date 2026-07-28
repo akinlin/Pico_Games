@@ -12,6 +12,11 @@ PADDLE_SPEED = 2
 
 -- playfield is rows 0-95, terminal band is 96-127
 PLAYFIELD_BOTTOM = 95
+
+-- horizontal speed is three discrete tiers off the rally hit counter,
+-- not continuous acceleration. counter saturates at 12.
+BALL_SPEEDS = {0.341, 0.683, 1.024}
+BALL_HITS_MAX = 12
 -- paddle top-edge travel: one paddle height of dead zone at each end
 PADDLE_MIN_Y = 6
 PADDLE_MAX_Y = 84
@@ -454,8 +459,10 @@ function pong:init_ball()
         maxy = xy,
         x = 64,
         y = rnd(xy),
-        -- per-frame velocity: old px/sec source over 60. m2 replaces this with the tier model.
-        dx = (xx - nx) / (flr(rnd(7)+1) * coin_flip() * 60),
+        -- rally hit counter drives horizontal speed; a fresh ball always starts at tier 1
+        hits = 0,
+        dx = BALL_SPEEDS[1] * coin_flip(),
+        -- placeholder: m3's 8-zone table replaces vertical velocity
         dy = (xy - ny) / (flr(rnd(7)+1) * coin_flip() * 60)
     }
 end
@@ -577,6 +584,12 @@ function pong.handle_game_input()
     player2.y += (inputdx*player2.dir)
 end
 
+function pong.speed_tier(hits)
+    if (hits >= BALL_HITS_MAX) then return 3 end
+    if (hits >= 4) then return 2 end
+    return 1
+end
+
 function pong.update_ball()
     -- fixed 60fps: velocity is the per-frame movement vector, no scaling
     local nx,ny = ball.dx,ball.dy
@@ -585,11 +598,13 @@ function pong.update_ball()
     -- loop all walls until a collsion is detected
     local x = 1
     local pt = nil
+    local hitwall = nil
     while (pt == nil) and (x <= #walls) do
         if (walls[x].collsion) then
             pt = pong.ball_intercept(ball, walls[x], nx, ny)
             if (pt) then
                 walls[x].collsionpt = {x=pt.x,y=pt.y,d=pt.d}
+                hitwall = walls[x]
             end
         end
         x += 1
@@ -603,6 +618,14 @@ function pong.update_ball()
             pos.y = pt.y
             pos.dy = -pos.dy
         end
+    end
+
+    -- a paddle contact is a rally hit: advance the counter, then restate the
+    -- horizontal speed from its tier. the bounce above already set the sign.
+    if (hitwall == player1) or (hitwall == player2) then
+        if (ball.hits < BALL_HITS_MAX) then ball.hits += 1 end
+        local spd = BALL_SPEEDS[pong.speed_tier(ball.hits)]
+        if (pos.dx < 0) then pos.dx = -spd else pos.dx = spd end
     end
 
     -- add/remove spin based on paddle direction
@@ -789,7 +812,9 @@ function pong.draw_board()
 end
 
 function pong.draw_ball()
-    rectfill(ball.x,ball.y,ball.x+ball.radius,ball.y+ball.radius,ball.color)
+    -- position is fractional and sub-pixel per frame; round only here
+    local bx,by = flr(ball.x),flr(ball.y)
+    rectfill(bx,by,bx+ball.radius,by+ball.radius,ball.color)
     --circfill(ball.x, ball.y, ball.radius, ball.color)
 end
 -->8
