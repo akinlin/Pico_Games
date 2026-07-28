@@ -1,5 +1,5 @@
 pico-8 cartridge // http://www.pico-8.com
-version 41
+version 43
 __lua__
 
 --[[
@@ -8,7 +8,7 @@ __lua__
 ]]
 SCORE_TO_WIN = 11
 
-PADDLE_SPEED = 4
+PADDLE_SPEED = 2
 
 -- [[ HELPER FUNCTIONS ]]
 function coin_flip()
@@ -200,7 +200,7 @@ function level:event(e)
             -- start section delay
             if self.dialogue.continuesequence then
                 printh('continued sequence')
-                add_timer(50,function () self.textbox:open(function() gm:event(level.events.tb_open) end) end)
+                add_timer(100,function () self.textbox:open(function() gm:event(level.events.tb_open) end) end)
             else
                 printh('stopped sequence')
             end
@@ -270,7 +270,7 @@ function _init()
 end
 
 --[[ UPDATE ]]
-function _update()
+function _update60()
 	gm:update()
 end
 
@@ -351,9 +351,6 @@ function pong:reset_game()
     self:init_ball()
     self:init_ai()
 
-    timelast = time()
-    dt = 0
-
     gm:change_state(game_manager.states.menu)
 end
 
@@ -426,16 +423,12 @@ function pong:init_players()
 end
 
 function pong:init_ball()
-    MAX_ACCEL = 10
-    MAX_SPEED = 160
-    
     local rad = 1
     local nx = rad
     local ny = 3 + rad
     local xx = gm.screenwidth - rad
     local xy = gm.screenheight - 3 - rad
-    local acc = 1
-    
+
     ball = {
         radius = rad,
         color = 6,
@@ -445,31 +438,32 @@ function pong:init_ball()
         maxy = xy,
         x = 64,
         y = rnd(xy),
-        dx = (xx - nx) / (flr(rnd(7)+1) * coin_flip()),
-        dy = (xy - ny) / (flr(rnd(7)+1) * coin_flip()),
-        accel = acc
+        -- per-frame velocity: old px/sec source over 60. m2 replaces this with the tier model.
+        dx = (xx - nx) / (flr(rnd(7)+1) * coin_flip() * 60),
+        dy = (xy - ny) / (flr(rnd(7)+1) * coin_flip() * 60)
     }
 end
 
 function pong:init_ai()
+    -- reaction is in frames at 60fps (was seconds, scaled by dt). m6 replaces this table.
     AILevels = {}
-    self:create_aitype(0.2, 1) -- 1: ai is losing by 8
-    self:create_aitype(0.3, 5) -- 2: ai is losing by 7
-    self:create_aitype(0.4, 10) -- 3: ai is losing by 6
-    self:create_aitype(0.5, 15) -- 4: ai is losing by 5
-    self:create_aitype(0.6, 20) -- 5: ai is losing by 4
-    self:create_aitype(0.7, 25) -- 6:ai is losing by 3
-    self:create_aitype(0.8, 30) -- 7: ai is losing by 2
-    self:create_aitype(0.9, 35) -- 8: ai is losing by 1 
-    self:create_aitype(1.0, 40) -- 9: tie
-    self:create_aitype(1.1, 45) -- 10: ai is winning by 1
-    self:create_aitype(1.2, 50) -- 11: ai is winning by 2
-    self:create_aitype(1.3, 55) -- 12: ai is winning by 3
-    self:create_aitype(1.4, 60) -- 13: ai is winning by 4
-    self:create_aitype(1.5, 65) -- 14: ai is winning by 5
-    self:create_aitype(1.6, 70) -- 15: ai is winning by 6
-    self:create_aitype(1.7, 75) -- 16: ai is winning by 7
-    self:create_aitype(1.8, 80) -- 17: ai is winning by 8
+    self:create_aitype(12, 1) -- 1: ai is losing by 8
+    self:create_aitype(18, 5) -- 2: ai is losing by 7
+    self:create_aitype(24, 10) -- 3: ai is losing by 6
+    self:create_aitype(30, 15) -- 4: ai is losing by 5
+    self:create_aitype(36, 20) -- 5: ai is losing by 4
+    self:create_aitype(42, 25) -- 6:ai is losing by 3
+    self:create_aitype(48, 30) -- 7: ai is losing by 2
+    self:create_aitype(54, 35) -- 8: ai is losing by 1
+    self:create_aitype(60, 40) -- 9: tie
+    self:create_aitype(66, 45) -- 10: ai is winning by 1
+    self:create_aitype(72, 50) -- 11: ai is winning by 2
+    self:create_aitype(78, 55) -- 12: ai is winning by 3
+    self:create_aitype(84, 60) -- 13: ai is winning by 4
+    self:create_aitype(90, 65) -- 14: ai is winning by 5
+    self:create_aitype(96, 70) -- 15: ai is winning by 6
+    self:create_aitype(102, 75) -- 16: ai is winning by 7
+    self:create_aitype(108, 80) -- 17: ai is winning by 8
 end
 
 function pong:create_aitype(reaction, error)
@@ -518,13 +512,10 @@ end
 function pong:update_game_state()
     pong.handle_game_input()
 
-    dt = time() - timelast
-    timelast = time()
-
     -- todo: check if ball is in the safe zone
     if (ball.x > -ball.radius) and (ball.x < gm.screenwidth + ball.radius) and 
         (ball.y < gm.screenheight+ball.radius) and (ball.y > -ball.radius) then 
-        pong.update_ball(dt)
+        pong.update_ball()
     else
         if (ball.dx > 0) then 
             hud.p1_score += 1
@@ -545,7 +536,7 @@ function pong:update_game_state()
         p:init_ball()
     end
 
-    if self.ai then pong.run_ai(dt, ball) end
+    if self.ai then pong.run_ai(ball) end
 end
 
 function pong.handle_game_input()
@@ -570,52 +561,17 @@ function pong.handle_game_input()
     player2.y += (inputdx*player2.dir)
 end
 
-function pong.accelerate(x, y, dx, dy, accel, dt)
-    -- update position
-    local x2 = x + (dx * dt)
-    local y2 = y + (dy * dt)
-
-    -- add acceleration
-    local dx2
-    if (abs(dx) < MAX_SPEED) then 
-        local acceldirx
-        if (dx < 0) then acceldirx = (accel*-1) else acceldirx = (accel*1) end
-        dx2 = dx + (acceldirx * dt)
-    else
-        dx2 = dx
-    end
-
-    local dy2
-    if (abs(dy) < MAX_SPEED) then 
-        local acceldiry
-        if (dy < 0) then acceldiry = (accel*-1) else acceldiry = (accel*1) end
-        dy2 = dy + (acceldiry * dt)
-    else
-        dy2 = dy
-    end
-
-    -- return new position
-    local p={
-        nx = x2-x,
-        ny = y2-y,
-        x = x2,
-        y = y2,
-        dx = dx2,
-        dy = dy2
-    }
-
-    return p
-end
-
-function pong.update_ball(dt)
-    local pos = pong.accelerate(ball.x, ball.y, ball.dx, ball.dy, ball.accel, dt)
+function pong.update_ball()
+    -- fixed 60fps: velocity is the per-frame movement vector, no scaling
+    local nx,ny = ball.dx,ball.dy
+    local pos = {x=ball.x+nx, y=ball.y+ny, dx=nx, dy=ny}
 
     -- loop all walls until a collsion is detected
     local x = 1
     local pt = nil
     while (pt == nil) and (x <= #walls) do
         if (walls[x].collsion) then
-            pt = pong.ball_intercept(ball, walls[x], pos.nx, pos.ny)
+            pt = pong.ball_intercept(ball, walls[x], nx, ny)
             if (pt) then
                 walls[x].collsionpt = {x=pt.x,y=pt.y,d=pt.d}
             end
@@ -728,7 +684,7 @@ function pong.intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
     return nil
 end
 
-function pong.run_ai(dt, ball)
+function pong.run_ai(ball)
     -- check if the ball is coming or going
     if (((ball.x < player1.x) and (ball.dx < 0)) or
         ((ball.x > player1.x+player1.width) and (ball.dx > 0))) then
@@ -737,7 +693,7 @@ function pong.run_ai(dt, ball)
     end
 
     -- if coming predict the intersection point
-    pong.predict(ball, dt)
+    pong.predict(ball)
 
     if (player1.prediction) then
         if (player1.prediction.y < (player1.y + player1.height/2 - 2)) then
@@ -757,18 +713,19 @@ function pong.run_ai(dt, ball)
     end
 end
 
-function pong.predict(ball, dt)
+function pong.predict(ball)
     -- only re-predict if the ball changed direction, or its been some amount of time since last prediction
     if (player1.prediction) then
         if ((player1.prediction.dx * ball.dx) > 0) and
             ((player1.prediction.dy * ball.dy) > 0) and
             (player1.prediction.since < AILevels[player1.level].aiReaction) then
-                player1.prediction.since += dt
+                player1.prediction.since += 1
                 return
         end
     end
 
-    local pt = pong.ball_intercept(ball, predictwall, ball.dx * 2, ball.dy * 2)
+    -- ray = 120 frames of travel, the same 2 seconds the old dt-scaled *2 gave
+    local pt = pong.ball_intercept(ball, predictwall, ball.dx * 120, ball.dy * 120)
 
     if (pt) then
         predictwall.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
@@ -955,7 +912,7 @@ function textbox:draw()
 		-- Debug print
 		if self.textvisible then
             blinkert+=1
-            if blinkert > 7 then
+            if blinkert > 15 then
                 blinkert = 0
                 if blinkerc == 16 then blinkerc = 32 else blinkerc = 16 end
             end
@@ -1053,7 +1010,7 @@ function dialogue:changestate(s)
         end,
         [dialogue.states.playing] = function()
             -- play until com or player wins
-            add_timer(50,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
+            add_timer(100,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
             self.continuesequence=false
             gm.level.pong.ai=true;
             hud.p1_score=0
@@ -1062,7 +1019,7 @@ function dialogue:changestate(s)
         end,
         [dialogue.states.finish] = function()
             -- at end of game pick win or lose message
-            add_timer(50,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
+            add_timer(100,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
             self.continuesequence=false
             gm:change_state(game_manager.states.gameover)
             player1.visible = false
@@ -1112,48 +1069,48 @@ local dialogue_denial = dialogue:new('denial',0,false)
 dialogues[1]=dialogue_denial
 local section = dialogue.create_section()
 add(dialogue_denial.sections,section)
-    add(section.phrases,dialogue.create_phrase('hello!?',7,180))
+    add(section.phrases,dialogue.create_phrase('hello!?',7,360))
 local section2 = dialogue.create_section()
 add(dialogue_denial.sections,section2)
-    add(section2.phrases,dialogue.create_phrase('where is the second player?',7,180))
-    add(section2.phrases,dialogue.create_phrase('are they in the bathroom?',7,240))
-    add(section2.phrases,dialogue.create_phrase('maybe you should wait for them',7,50))
-    add(section2.phrases,dialogue.create_phrase('its their quarter too',7,100))
+    add(section2.phrases,dialogue.create_phrase('where is the second player?',7,360))
+    add(section2.phrases,dialogue.create_phrase('are they in the bathroom?',7,480))
+    add(section2.phrases,dialogue.create_phrase('maybe you should wait for them',7,100))
+    add(section2.phrases,dialogue.create_phrase('its their quarter too',7,200))
 local section3 = dialogue.create_section()
 add(dialogue_denial.sections,section3)
-    add(section3.phrases,dialogue.create_phrase('you know pong is a 2-player game right?',7,180))
+    add(section3.phrases,dialogue.create_phrase('you know pong is a 2-player game right?',7,360))
     --add(section3.phrases,dialogue.create_phrase('is it?...',7,50))
    -- add(section3.phrases,dialogue.create_phrase('that you..',7,50))
-    add(section3.phrases,dialogue.create_phrase('dont have any friends?',7,120))
+    add(section3.phrases,dialogue.create_phrase('dont have any friends?',7,240))
     --add(section3.phrases,dialogue.create_phrase('i mean if so, thats fine',7,90))
    -- add(section3.phrases,dialogue.create_phrase('i dont have any either',7,180))
    -- add(section3.phrases,dialogue.create_phrase('i just...',7,75))
-    add(section3.phrases,dialogue.create_phrase('sorry what i mean is',7,60))
-    add(section3.phrases,dialogue.create_phrase('do you want some help?',7,100))
+    add(section3.phrases,dialogue.create_phrase('sorry what i mean is',7,120))
+    add(section3.phrases,dialogue.create_phrase('do you want some help?',7,200))
    -- add(section3.phrases,dialogue.create_phrase('i could play',7,150))
 local section4 = dialogue.create_section()
 add(dialogue_denial.sections,section4)
   --  add(section4.phrases,dialogue.create_phrase('kinda excited, actually',7,120))
-    add(section4.phrases,dialogue.create_phrase('never got to play before',7,180))
-    add(section4.phrases,dialogue.create_phrase('i bet i am really good',7,90))
+    add(section4.phrases,dialogue.create_phrase('never got to play before',7,360))
+    add(section4.phrases,dialogue.create_phrase('i bet i am really good',7,180))
   --  add(section4.phrases,dialogue.create_phrase('like super good, i bet',7,90))
-    add(section4.phrases,dialogue.create_phrase('brb, gonna jump in real quick',7,180))
+    add(section4.phrases,dialogue.create_phrase('brb, gonna jump in real quick',7,360))
 local section5 = dialogue.create_section()
     add(dialogue_denial.sections,section5)
-    add(section5.phrases,dialogue.create_phrase('there we go',7,120))
-    add(section5.phrases,dialogue.create_phrase('alright, this feels good',7,180))
-    add(section5.phrases,dialogue.create_phrase('a little trickier than I thought',7,90))
-    add(section5.phrases,dialogue.create_phrase('i will shut up now so we can play',7,90))
+    add(section5.phrases,dialogue.create_phrase('there we go',7,240))
+    add(section5.phrases,dialogue.create_phrase('alright, this feels good',7,360))
+    add(section5.phrases,dialogue.create_phrase('a little trickier than I thought',7,180))
+    add(section5.phrases,dialogue.create_phrase('i will shut up now so we can play',7,180))
     -- win
 local section6 = dialogue.create_section()
 add(dialogue_denial.sections,section6)
-    add(section6.phrases,dialogue.create_phrase('see, just as i said',7,120))
-    add(section6.phrases,dialogue.create_phrase('i am good at this game',7,120))
+    add(section6.phrases,dialogue.create_phrase('see, just as i said',7,240))
+    add(section6.phrases,dialogue.create_phrase('i am good at this game',7,240))
     --lose
 local section7 = dialogue.create_section()
 add(dialogue_denial.sections,section7)
-    add(section7.phrases,dialogue.create_phrase('hmm, i lost',7,120))
-    add(section7.phrases,dialogue.create_phrase('thats not possible',7,120))
+    add(section7.phrases,dialogue.create_phrase('hmm, i lost',7,240))
+    add(section7.phrases,dialogue.create_phrase('thats not possible',7,240))
 
 -- and the rest
 dialogues[2]=dialogue:new('anger',8,true)
