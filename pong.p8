@@ -11,6 +11,8 @@ PLAYFIELD_BOTTOM = 95
 
 BALL_SPEEDS = {0.341, 0.683, 1.024}
 BALL_HITS_MAX = 12
+BALL_VZONES = {-1.171,-0.780,-0.390,0,0,0.390,0.780,1.171}
+BALL_ZONE_SIZE = 0.75
 PADDLE_MIN_Y = 6
 PADDLE_MAX_Y = 84
 
@@ -530,6 +532,10 @@ function pong.speed_tier(hits)
     return 1
 end
 
+function pong.contact_zone(cy, py)
+    return mid(1, flr((cy - py) / BALL_ZONE_SIZE) + 1, 8)
+end
+
 function pong.update_ball()
     local nx,ny = ball.dx,ball.dy
     local pos = {x=ball.x+nx, y=ball.y+ny, dx=nx, dy=ny}
@@ -562,34 +568,15 @@ function pong.update_ball()
         if (ball.hits < BALL_HITS_MAX) then ball.hits += 1 end
         local spd = BALL_SPEEDS[pong.speed_tier(ball.hits)]
         if (pos.dx < 0) then pos.dx = -spd else pos.dx = spd end
-    end
-
-    if (player1.collsionpt) or (player2.collsionpt) then
-        if (player1.collsionpt) then
-            pong.apply_spin(player1, pos)
-            player1.collsionpt = nil
-        else
-            pong.apply_spin(player2, pos)
-            player2.collsionpt = nil
-        end
+        pos.dy = BALL_VZONES[pong.contact_zone(pt.y, hitwall.y)]
+        player1.collsionpt = nil
+        player2.collsionpt = nil
     end
 
     ball.x = pos.x
     ball.y = pos.y
     ball.dx = pos.dx
     ball.dy = pos.dy
-end
-
-function pong.apply_spin(collision_wall, pos)
-    if (collision_wall.dir == -1) then
-        local delta
-        if (pos.dy < 0) then delta = .5 else delta = 1.5 end
-        pos.dy = pos.dy * delta
-    elseif (collision_wall.dir == 1) then
-        local delta
-        if (pos.dy > 0) then delta = .5 else delta = 1.5 end
-        pos.dy = pos.dy * delta
-    end
 end
 
 function pong.ball_intercept(ball, paddle, nx, ny)

@@ -337,6 +337,30 @@ Two dialogue rules that are easy to violate by accident:
 
 ---
 
+## Codebase gotchas
+
+Non-obvious properties of the existing code. Each of these has already caused, or is
+positioned to cause, an off-by-one that looks like a physics bug.
+
+- **`create_wall()`'s draw is inclusive.** `rectfill(x, y, x+width, y+height)` paints
+  `width+1` columns and `height+1` rows, so a wall of `width = 1` renders **2 px**. The
+  paddles therefore carry `width = 0, height = 5` to render the spec's 1 × 6. Collision
+  reads the *logical* extent, so logical and drawn size differ by one throughout.
+  M5 is the milestone that should formalize this rather than leave every caller to
+  compensate.
+- **`ball.y` means two different things.** Collision expands each wall by `ball.radius`
+  and treats `(ball.x, ball.y)` as the ball's **center**; `draw_ball()` passes it to
+  `rectfill` as the **top-left corner**. The drawn ball therefore sits one pixel
+  down-right of where collision believes it is. Zone selection is unaffected — it works
+  entirely in collision space, where the model is self-consistent — but any code mixing
+  drawn and collided positions must reconcile the two first.
+- **The score `hud.p1_x` / `p2_x` are field *inner* edges, not left edges.** The left
+  score is right-aligned onto its edge so the pair stays symmetric about the net at any
+  digit count. `\^p` is *pinball* mode (wide + tall + stripey), so each glyph is **8 px**
+  wide, not 4 — which is what made an earlier placement overlap the net at double digits.
+
+---
+
 ## Deliberate divergences from the 1972 hardware
 
 Flagged so you don't "fix" them:
