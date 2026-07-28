@@ -32,9 +32,9 @@ Rules that matter:
 
 ## How we work
 
-**You cannot run this code.** There is no PICO-8 binary here, no screenshots, no test
-harness. Every behavioral claim you make is a hypothesis until the user launches the
-cart and reports back. Therefore:
+**You cannot see this code run.** There are no screenshots and no test harness. Every
+behavioral claim you make is a hypothesis until the user launches the cart and reports
+back. Therefore:
 
 - Work in small increments that the user can verify by eye in one sitting.
 - End every change with a short **"verify this"** block: what to look at, what correct
@@ -44,6 +44,14 @@ cart and reports back. Therefore:
 - When a value needs playtesting rather than derivation (paddle acceleration curve,
   dialogue timer durations), say so explicitly and give a starting value with a range.
 - Never claim something "works" or "is tested."
+
+**You can check that it parses.** PICO-8 0.2.7 is installed at
+`C:\Program Files (x86)\PICO-8\pico8.exe` (not on `PATH`). Running it with
+`-x pong.p8` loads the cart headlessly, executes the top-level chunk, prints
+`RUNNING: pong.p8` and exits 0 — a syntax error or a load-time runtime error surfaces
+there instead of on the user's next launch. Do this after every edit to the cart, before
+writing the verify block. It does **not** run `_update60` or `_draw`, so it proves
+nothing behavioral: report it as "parses and loads clean," never as "works."
 
 **Debugging.** `printh()` writes to the host console and is the only real logging
 channel. The existing cart has a `draw_debug()` for collision-point visualization —
