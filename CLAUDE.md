@@ -337,23 +337,33 @@ Two dialogue rules that are easy to violate by accident:
 
 ---
 
-## Codebase gotchas
+## Codebase conventions and gotchas
 
-Non-obvious properties of the existing code. Each of these has already caused, or is
-positioned to cause, an off-by-one that looks like a physics bug.
+### Settled conventions
 
-- **`create_wall()`'s draw is inclusive.** `rectfill(x, y, x+width, y+height)` paints
-  `width+1` columns and `height+1` rows, so a wall of `width = 1` renders **2 px**. The
-  paddles therefore carry `width = 0, height = 5` to render the spec's 1 × 6. Collision
-  reads the *logical* extent, so logical and drawn size differ by one throughout.
-  M5 is the milestone that should formalize this rather than leave every caller to
-  compensate.
-- **`ball.y` means two different things.** Collision expands each wall by `ball.radius`
-  and treats `(ball.x, ball.y)` as the ball's **center**; `draw_ball()` passes it to
-  `rectfill` as the **top-left corner**. The drawn ball therefore sits one pixel
-  down-right of where collision believes it is. Zone selection is unaffected — it works
-  entirely in collision space, where the model is self-consistent — but any code mixing
-  drawn and collided positions must reconcile the two first.
+Both were off-by-one traps until M5. They are now uniform; new code must not reintroduce
+the split.
+
+- **A wall's logical size is its drawn size.** `create_wall()` draws
+  `rectfill(x, y, x+width-1, y+height-1)`, and collision reads the same `width` /
+  `height`. Paddles therefore carry the spec's real `1 × 6`. Under the previous inclusive
+  draw the paddle's collidable face was 5 units against a 6 px sprite, which gave it an
+  overhang above its top edge and none below — the top rim returned steep-up 2.4× more
+  often than the bottom rim returned steep-down. Zone reachability is symmetric now.
+- **`ball.x` / `ball.y` are the ball's center**, in collision, in drawing and in zone
+  selection alike. `draw_balls()` renders outward from it. The field bounds are placed so
+  the ball's *edge* lands flush on rows 0 and 95: top wall at `y = -3`, bottom at
+  `PLAYFIELD_BOTTOM + 1`.
+
+### Still live
+
+- **`intercept()`'s ±140 / −50 clamps are load-bearing for the AI, not for the ball.**
+  Measured worst-case products against the 32,767 ceiling of a 16.16 number: ball-vs-wall
+  collision peaks at **12,480**, and the clamps never fire, because ball coordinates stay
+  inside [-1, 129]. The prediction ray is the opposite — `predict_wall` is 330 px tall, so
+  an unclamped tier-3 ray gives 122.9 × 330 = 40,551, which **wraps to −24,986** and
+  returns a garbage intersection. The clamps therefore stay until M6 reworks `predict()`,
+  and the AABB pre-reject is what keeps their cost out of the swarm's inner loop.
 - **The score `hud.p1_x` / `p2_x` are field *inner* edges, not left edges.** The left
   score is right-aligned onto its edge so the pair stays symmetric about the net at any
   digit count. `\^p` is *pinball* mode (wide + tall + stripey), so each glyph is **8 px**
