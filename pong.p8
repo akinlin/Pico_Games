@@ -152,7 +152,7 @@ function game_manager:draw()
             self.level.textbox:draw()
 		end,
 		[game_manager.states.intermission] = function()
-            pong.draw_ball()
+            pong.draw_balls()
             print("press ❎ to continue",32,64,7)
 		end
 	}
@@ -240,7 +240,7 @@ function level:update()
 end
 
 function level:draw()
-    pong.draw_ball()
+    pong.draw_balls()
 	tb:draw()
 end
 
@@ -323,7 +323,7 @@ function pong:reset_game()
     self:init_board()
     self:init_hud()
     self:init_players()
-    self:init_ball()
+    self:init_balls()
     self:init_ai()
 
     gm:change_state(game_manager.states.menu)
@@ -331,11 +331,11 @@ end
 
 function pong:init_board()
     walls = {}
-    local top = self:create_wall(0,-4,gm.screenwidth,3)
+    local top = self:create_wall(0,-3,gm.screenwidth,3)
     top.visible = false
     add(walls, top)
 
-    local bottom = self:create_wall(0,PLAYFIELD_BOTTOM,gm.screenwidth,3)
+    local bottom = self:create_wall(0,PLAYFIELD_BOTTOM+1,gm.screenwidth,3)
     bottom.visible = false
     add(walls, bottom)
 
@@ -374,9 +374,9 @@ function pong:init_hud()
 end
 
 function pong:init_players()
-    local paddle_width = 0
-    local paddle_height = 5
-    local paddle_starting_y = ((PLAYFIELD_BOTTOM+1)/2)-((paddle_height+1)/2)
+    local paddle_width = 1
+    local paddle_height = 6
+    local paddle_starting_y = ((PLAYFIELD_BOTTOM+1)/2)-(paddle_height/2)
     player1 = self:create_wall(20,paddle_starting_y,paddle_width,paddle_height)
     player1.dir = 1
     player1.prediction = nil
@@ -394,19 +394,27 @@ function pong:init_players()
     add(walls, player2)
 end
 
-function pong:init_ball()
-    local rad = 1
+function pong:init_balls(n)
+    balls = {}
+    for i=1,(n or 1) do
+        self:add_ball()
+    end
+end
 
-    ball = {
+function pong:add_ball()
+    local rad = 1
+    local b = {
         radius = rad,
         color = 6,
         x = SERVE_X,
-        y = rnd(PLAYFIELD_BOTTOM - rad),
+        y = rad + rnd(PLAYFIELD_BOTTOM - rad - rad),
         hits = 0,
         serving = 0,
         dx = BALL_SPEEDS[1] * coin_flip(),
         dy = BALL_VZONES[8] * coin_flip()
     }
+    add(balls, b)
+    return b
 end
 
 function pong:init_ai()
@@ -466,7 +474,7 @@ function pong:create_wall(xpos,ypos,w,h)
         collisiontextboxcolor = 8,
         collision_debug_draw = false,
         drawf = function(a)
-                    rectfill(a.x,a.y,a.x+a.width,a.y+a.height,a.color)
+                    rectfill(a.x,a.y,a.x+a.width-1,a.y+a.height-1,a.color)
                 end
     }
 
@@ -476,54 +484,60 @@ end
 function pong:update_game_state()
     pong.handle_game_input()
 
-    if (ball.serving > 0) then
-        pong.update_serve()
-    elseif (ball.x > -ball.radius) and (ball.x < gm.screenwidth + ball.radius) and
-        (ball.y < PLAYFIELD_BOTTOM+ball.radius) and (ball.y > -ball.radius) then
-        pong.update_ball()
+    for i=1,#balls do
+        local b = balls[i]
+        if (b.serving > 0) then
+            pong.update_serve(b)
+        elseif (b.x > -b.radius) and (b.x < gm.screenwidth + b.radius) and
+            (b.y < PLAYFIELD_BOTTOM+b.radius) and (b.y > -b.radius) then
+            pong.update_ball(b)
+        else
+            pong.score_point(b)
+        end
+    end
+
+    if self.ai then pong.run_ai(balls[1]) end
+end
+
+function pong.score_point(b)
+    if (b.dx > 0) then
+        hud.p1_score += 1
+        if (player1.level < 17) then
+            player1.level += 1
+        end
     else
-        if (ball.dx > 0) then
-            hud.p1_score += 1
-            if (player1.level < 17) then
-                player1.level += 1
-            end
-        else
-            hud.p2_score += 1
-            if (player1.level > 1) then
-                player1.level -= 1
-            end
+        hud.p2_score += 1
+        if (player1.level > 1) then
+            player1.level -= 1
         end
-        if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then
-        end
-        pong.begin_serve()
     end
-
-    if self.ai then pong.run_ai(ball) end
+    pong.begin_serve(b)
 end
 
-function pong.begin_serve()
-    ball.serving = SERVE_DELAY
-    ball.hits = 0
+function pong.begin_serve(b)
+    b.serving = SERVE_DELAY
+    b.hits = 0
 end
 
-function pong.update_serve()
-    local maxy = PLAYFIELD_BOTTOM - ball.radius
-    ball.y += ball.dy
-    if (ball.y < 0) then
-        ball.y = -ball.y
-        ball.dy = -ball.dy
-    elseif (ball.y > maxy) then
-        ball.y = (maxy*2) - ball.y
-        ball.dy = -ball.dy
+function pong.update_serve(b)
+    local r = b.radius
+    local miny,maxy = r, PLAYFIELD_BOTTOM - r + 1
+    b.y += b.dy
+    if (b.y < miny) then
+        b.y = (miny*2) - b.y
+        b.dy = -b.dy
+    elseif (b.y > maxy) then
+        b.y = (maxy*2) - b.y
+        b.dy = -b.dy
     end
 
-    ball.serving -= 1
-    if (ball.serving <= 0) then
-        ball.x = SERVE_X
-        if (ball.dx < 0) then
-            ball.dx = -BALL_SPEEDS[1]
+    b.serving -= 1
+    if (b.serving <= 0) then
+        b.x = SERVE_X
+        if (b.dx < 0) then
+            b.dx = -BALL_SPEEDS[1]
         else
-            ball.dx = BALL_SPEEDS[1]
+            b.dx = BALL_SPEEDS[1]
         end
     end
 end
@@ -560,47 +574,53 @@ function pong.contact_zone(cy, py)
     return mid(1, flr((cy - py) / BALL_ZONE_SIZE) + 1, 8)
 end
 
-function pong.update_ball()
-    local nx,ny = ball.dx,ball.dy
-    local pos = {x=ball.x+nx, y=ball.y+ny, dx=nx, dy=ny}
+function pong.update_ball(b)
+    local nx,ny = b.dx,b.dy
+    local bx,by,r = b.x,b.y,b.radius
+    local px,py = bx+nx, by+ny
+    local ndx,ndy = nx,ny
 
-    local x = 1
-    local pt = nil
-    local hitwall = nil
-    while (pt == nil) and (x <= #walls) do
-        if (walls[x].collsion) then
-            pt = pong.ball_intercept(ball, walls[x], nx, ny)
-            if (pt) then
-                walls[x].collsionpt = {x=pt.x,y=pt.y,d=pt.d}
-                hitwall = walls[x]
+    local lox,hix = min(bx,px)-r, max(bx,px)+r
+    local loy,hiy = min(by,py)-r, max(by,py)+r
+
+    local w = walls
+    local pt,hitwall = nil,nil
+    for i=1,#w do
+        local wl = w[i]
+        if wl.collsion and hix >= wl.x and lox <= wl.x+wl.width
+            and hiy >= wl.y and loy <= wl.y+wl.height then
+            pt = pong.ball_intercept(b, wl, nx, ny)
+            if pt then
+                wl.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
+                hitwall = wl
+                break
             end
         end
-        x += 1
     end
 
     if pt then
         if (pt.d == 'left' or pt.d == 'right') then
-            pos.x = pt.x
-            pos.dx = -pos.dx
+            px = pt.x
+            ndx = -ndx
         elseif (pt.d == 'top' or pt.d == 'bottom') then
-            pos.y = pt.y
-            pos.dy = -pos.dy
+            py = pt.y
+            ndy = -ndy
         end
     end
 
     if (hitwall == player1) or (hitwall == player2) then
-        if (ball.hits < BALL_HITS_MAX) then ball.hits += 1 end
-        local spd = BALL_SPEEDS[pong.speed_tier(ball.hits)]
-        if (pos.dx < 0) then pos.dx = -spd else pos.dx = spd end
-        pos.dy = BALL_VZONES[pong.contact_zone(pt.y, hitwall.y)]
+        if (b.hits < BALL_HITS_MAX) then b.hits += 1 end
+        local spd = BALL_SPEEDS[pong.speed_tier(b.hits)]
+        if (ndx < 0) then ndx = -spd else ndx = spd end
+        ndy = BALL_VZONES[pong.contact_zone(pt.y, hitwall.y)]
         player1.collsionpt = nil
         player2.collsionpt = nil
     end
 
-    ball.x = pos.x
-    ball.y = pos.y
-    ball.dx = pos.dx
-    ball.dy = pos.dy
+    b.x = px
+    b.y = py
+    b.dx = ndx
+    b.dy = ndy
 end
 
 function pong.ball_intercept(ball, paddle, nx, ny)
@@ -708,8 +728,8 @@ function pong.predict(ball)
 
     if (pt) then
         predictwall.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
-        local t = 0
-        local b = PLAYFIELD_BOTTOM - ball.radius
+        local t = ball.radius
+        local b = PLAYFIELD_BOTTOM - ball.radius + 1
 
         while ((pt.y < t) or (pt.y > b)) do
             if (pt.y < t) then
@@ -748,10 +768,15 @@ function pong.draw_board()
     draw_score()
 end
 
-function pong.draw_ball()
-    if (ball.serving > 0) then return end
-    local bx,by = flr(ball.x),flr(ball.y)
-    rectfill(bx,by,bx+ball.radius,by+ball.radius,ball.color)
+function pong.draw_balls()
+    for i=1,#balls do
+        local b = balls[i]
+        if (b.serving <= 0) then
+            local r = b.radius
+            local bx,by = flr(b.x)-r,flr(b.y)-r
+            rectfill(bx,by,bx+r+r-1,by+r+r-1,b.color)
+        end
+    end
 end
 -->8
 dialogue = {}
