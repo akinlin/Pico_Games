@@ -2,26 +2,18 @@ pico-8 cartridge // http://www.pico-8.com
 version 43
 __lua__
 
---[[
-    --Branch Goals--
    
-]]
 SCORE_TO_WIN = 11
 
 PADDLE_SPEED = 2
 
--- playfield is rows 0-95, terminal band is 96-127
 PLAYFIELD_BOTTOM = 95
 
--- horizontal speed is three discrete tiers off the rally hit counter,
--- not continuous acceleration. counter saturates at 12.
 BALL_SPEEDS = {0.341, 0.683, 1.024}
 BALL_HITS_MAX = 12
--- paddle top-edge travel: one paddle height of dead zone at each end
 PADDLE_MIN_Y = 6
 PADDLE_MAX_Y = 84
 
--- [[ HELPER FUNCTIONS ]]
 function coin_flip()
     if rnd(2) > 1 then
         return 1
@@ -45,18 +37,14 @@ function update_timers()
 	for x=#timers, 1, -1 do
 		timer = timers[x]
 		timer.time += 1
-		--if timer.tick then timer.tick() end
 		if timer.time > timer.delaytime then
-			--if timer.event then timer.event() end
 			timer.event()
 			del(timers,timer)
 		end
 	end
 end
 
--- [[ Game Manager ]]
 game_manager = {}
--- states and events
 game_manager.states = {title=0,menu=1,options=2,level=3,gameover=4,intermission=5}
 game_manager.events = {level_complete=10}
 game_manager.inputevents = {key_pressed=20}
@@ -111,7 +99,6 @@ function game_manager:input(e)
 					self:change_state(game_manager.states.level)
 					self.level:load()
 				else
-					-- if no levels loaded exit to game over
 					self:change_state(game_manager.states.gameover)
 				end
 			end
@@ -161,7 +148,6 @@ function game_manager:draw()
             self.level.textbox:draw()
 		end,
 		[game_manager.states.intermission] = function()
-            -- pong
             pong.draw_ball()
             print("press ❎ to continue",32,64,7)
 		end
@@ -175,7 +161,6 @@ function game_manager:draw()
     end
 end
 
--- [[ Level ]]
 level = {}
 level.__index = level
 level.events = {phrase_complete=40,section_complete=41,sequence_complete=42,level_complete=43,tb_open=44,tb_closed=45}
@@ -193,8 +178,6 @@ function level:load()
 	self.textbox.sectiontitle=self.dialogue.title
 	self.textbox.sectionphrase=self.dialogue.phrase.text
 	self.textbox.rect.color=self.dialogue.color
-    -- dialog should decide when textbox is opened
-	--self.textbox:open(function() gm:event(level.events.tb_open) end)
     self.dialogue:init()
 
     player1.visible = true
@@ -204,11 +187,9 @@ end
 function level:event(e)
     local actions = {
         [level.events.tb_open] = function()
-            -- start text sequence
             self.dialogue:load_next()
         end,
         [level.events.tb_closed] = function()
-            -- start section delay
             if self.dialogue.continuesequence then
                 printh('continued sequence')
                 add_timer(100,function () self.textbox:open(function() gm:event(level.events.tb_open) end) end)
@@ -246,8 +227,6 @@ function level:printdebugdialogue()
 end
 
 function level:input()
-	-- pass input for pong
-	-- pass input for texbox
 end
 
 function level:update()
@@ -261,19 +240,13 @@ function level:draw()
 	tb:draw()
 end
 
---[[ INIT ]]
 function _init()
-    -- creates the global gm object
 	gm = game_manager:new()
     gm.screenwidth = 128
     gm.screenheight = 128
-	-- create textbox object
-	-- terminal band: rows 96-127
 	tb = textbox:new(0,96,127,31,12)
-    -- create pong object
     p = pong:new()
     p:reset_game()
-	-- add 5 levels
 	gm:add_level(level:new(dialogues[1],tb,p))
 	gm:add_level(level:new(dialogues[2],tb,p))
 	gm:add_level(level:new(dialogues[3],tb,p))
@@ -281,7 +254,6 @@ function _init()
 	gm:add_level(level:new(dialogues[5],tb,p))
 end
 
---[[ UPDATE ]]
 function _update60()
 	gm:update()
 end
@@ -298,35 +270,22 @@ function update_gameover_state()
     end
 end
 
---[[ DRAW ]]
 function _draw()
 	cls(0)
 
     gm:draw()
 
-    -- debug rendering
-    --draw_debug()
 end
 
 function draw_score()
-    -- set enable, padding, wide, tall, inverted, dotty
-    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8 | 0x20 | 0x40)
-    --poke(0x5f58, 0x1 | 0x2 | 0x4 | 0x8)
 
-    --print(hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
-    --print(hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
 
-    -- clear all flags, including enable
-    --poke(0x5f58, 0)
 
-    -- \^p is pinball mode: each glyph is 8px wide. the left score is right-aligned on
-    -- its inner edge so both fields stay symmetric about the net at any digit count.
     print("\^p" .. hud.p1_score,hud.p1_x-(#tostr(hud.p1_score)*8),hud.p1_y,hud.p1_color)
     print("\^p" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
 end
 
 function draw_debug()
-    -- draw collsion box on wall
     for x=1,#walls do 
         if (walls[x].collision_debug_draw) then 
             if (walls[x].collsionpt) then
@@ -335,7 +294,6 @@ function draw_debug()
         end
     end
 
-    -- debug prediction collision box drawing
     if (predictwall.collsionpt) then
         rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
     end
@@ -347,7 +305,6 @@ function draw_debug()
 end
 
 -->8
--- pong
 pong = {
     ai=false
 }
@@ -370,7 +327,6 @@ end
 
 function pong:init_board()
     walls = {}
-    -- bounds are collidable but never drawn: the bottom one sits inside the band
     local top = self:create_wall(0,-4,gm.screenwidth,3)
     top.visible = false
     add(walls, top)
@@ -402,13 +358,10 @@ end
 
 function pong:init_hud()
     hud = {
-        -- score fields sit 22-44px either side of the net, scaled from the original's
-        -- H 128-191 / H 320-383. p1_x is its field's inner edge, not its left edge.
         p1_score = 0,
         p1_x = 42,
         p1_y = 8,
         p1_color = 7,
-        -- p2 is human player
         p2_score = 0,
         p2_x = 87,
         p2_y = 8,
@@ -417,25 +370,20 @@ function pong:init_hud()
 end
 
 function pong:init_players()
-    -- player paddels are added to the walls array for rendering
-    -- create_wall draws x..x+width inclusive, so 0/5 renders the spec's 1x6 px paddle
     local paddle_width = 0
     local paddle_height = 5
     local paddle_starting_y = ((PLAYFIELD_BOTTOM+1)/2)-((paddle_height+1)/2)
     player1 = self:create_wall(20,paddle_starting_y,paddle_width,paddle_height)
     player1.dir = 1
-    -- in a 1 player game player1 is ai, add prediction member
     player1.prediction = nil
     player1.level = 8
     player1.collisiontextboxcolor = 14
     player1.visible = false
     add(walls, player1)
-    -- test wall for ai prediction
     predictwall = self:create_wall(player1.x,-100,player1.width,gm.screenheight+200)
     predictwall.collisiontextboxcolor = 10
     predictwall.drawf = function(a) rect(a.x,a.y,a.x+a.width,a.y+a.height,1) end
 
-    -- player 2 is always a human player
     player2 = self:create_wall(108,paddle_starting_y,paddle_width,paddle_height)
     player2.dir = 1
     player2.visible = false
@@ -447,7 +395,6 @@ function pong:init_ball()
     local nx = rad
     local ny = 0
     local xx = gm.screenwidth - rad
-    -- ball.y is a top-left corner, so the lowest legal value keeps row y+1 inside the playfield
     local xy = PLAYFIELD_BOTTOM - rad
 
     ball = {
@@ -459,34 +406,31 @@ function pong:init_ball()
         maxy = xy,
         x = 64,
         y = rnd(xy),
-        -- rally hit counter drives horizontal speed; a fresh ball always starts at tier 1
         hits = 0,
         dx = BALL_SPEEDS[1] * coin_flip(),
-        -- placeholder: m3's 8-zone table replaces vertical velocity
         dy = (xy - ny) / (flr(rnd(7)+1) * coin_flip() * 60)
     }
 end
 
 function pong:init_ai()
-    -- reaction is in frames at 60fps (was seconds, scaled by dt). m6 replaces this table.
     AILevels = {}
-    self:create_aitype(12, 1) -- 1: ai is losing by 8
-    self:create_aitype(18, 5) -- 2: ai is losing by 7
-    self:create_aitype(24, 10) -- 3: ai is losing by 6
-    self:create_aitype(30, 15) -- 4: ai is losing by 5
-    self:create_aitype(36, 20) -- 5: ai is losing by 4
-    self:create_aitype(42, 25) -- 6:ai is losing by 3
-    self:create_aitype(48, 30) -- 7: ai is losing by 2
-    self:create_aitype(54, 35) -- 8: ai is losing by 1
-    self:create_aitype(60, 40) -- 9: tie
-    self:create_aitype(66, 45) -- 10: ai is winning by 1
-    self:create_aitype(72, 50) -- 11: ai is winning by 2
-    self:create_aitype(78, 55) -- 12: ai is winning by 3
-    self:create_aitype(84, 60) -- 13: ai is winning by 4
-    self:create_aitype(90, 65) -- 14: ai is winning by 5
-    self:create_aitype(96, 70) -- 15: ai is winning by 6
-    self:create_aitype(102, 75) -- 16: ai is winning by 7
-    self:create_aitype(108, 80) -- 17: ai is winning by 8
+    self:create_aitype(12, 1)
+    self:create_aitype(18, 5)
+    self:create_aitype(24, 10)
+    self:create_aitype(30, 15)
+    self:create_aitype(36, 20)
+    self:create_aitype(42, 25)
+    self:create_aitype(48, 30)
+    self:create_aitype(54, 35)
+    self:create_aitype(60, 40)
+    self:create_aitype(66, 45)
+    self:create_aitype(72, 50)
+    self:create_aitype(78, 55)
+    self:create_aitype(84, 60)
+    self:create_aitype(90, 65)
+    self:create_aitype(96, 70)
+    self:create_aitype(102, 75)
+    self:create_aitype(108, 80)
 end
 
 function pong:create_aitype(reaction, error)
@@ -535,7 +479,6 @@ end
 function pong:update_game_state()
     pong.handle_game_input()
 
-    -- todo: check if ball is in the safe zone
     if (ball.x > -ball.radius) and (ball.x < gm.screenwidth + ball.radius) and 
         (ball.y < PLAYFIELD_BOTTOM+ball.radius) and (ball.y > -ball.radius) then
         pong.update_ball()
@@ -552,9 +495,6 @@ function pong:update_game_state()
             end
         end
         if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then 
-            --gm:change_state(game_manager.states.gameover)
-            --player1.visible = false
-            --player2.visible = false
         end
         p:init_ball()
     end
@@ -591,11 +531,9 @@ function pong.speed_tier(hits)
 end
 
 function pong.update_ball()
-    -- fixed 60fps: velocity is the per-frame movement vector, no scaling
     local nx,ny = ball.dx,ball.dy
     local pos = {x=ball.x+nx, y=ball.y+ny, dx=nx, dy=ny}
 
-    -- loop all walls until a collsion is detected
     local x = 1
     local pt = nil
     local hitwall = nil
@@ -620,15 +558,12 @@ function pong.update_ball()
         end
     end
 
-    -- a paddle contact is a rally hit: advance the counter, then restate the
-    -- horizontal speed from its tier. the bounce above already set the sign.
     if (hitwall == player1) or (hitwall == player2) then
         if (ball.hits < BALL_HITS_MAX) then ball.hits += 1 end
         local spd = BALL_SPEEDS[pong.speed_tier(ball.hits)]
         if (pos.dx < 0) then pos.dx = -spd else pos.dx = spd end
     end
 
-    -- add/remove spin based on paddle direction
     if (player1.collsionpt) or (player2.collsionpt) then
         if (player1.collsionpt) then
             pong.apply_spin(player1, pos)
@@ -696,8 +631,6 @@ function pong.ball_intercept(ball, paddle, nx, ny)
 end
 
 function pong.intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
-    -- todo: add support for a screen bounding box 
-    -- clipping the line extentions so the numbers dont go above 32K
     if (x1 > 140) then x1 = 140 elseif (x1 < -50) then x1 = -50 end
     if (x2 > 140) then x2 = 140 elseif (x2 < -50) then x2 = -50 end
     if (x3 > 140) then x3 = 140 elseif (x3 < -50) then x3 = -50 end
@@ -724,14 +657,12 @@ function pong.intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
 end
 
 function pong.run_ai(ball)
-    -- check if the ball is coming or going
     if (((ball.x < player1.x) and (ball.dx < 0)) or
         ((ball.x > player1.x+player1.width) and (ball.dx > 0))) then
         player1.dir = 0
         return
     end
 
-    -- if coming predict the intersection point
     pong.predict(ball)
 
     if (player1.prediction) then
@@ -753,7 +684,6 @@ function pong.run_ai(ball)
 end
 
 function pong.predict(ball)
-    -- only re-predict if the ball changed direction, or its been some amount of time since last prediction
     if (player1.prediction) then
         if ((player1.prediction.dx * ball.dx) > 0) and
             ((player1.prediction.dy * ball.dy) > 0) and
@@ -763,7 +693,6 @@ function pong.predict(ball)
         end
     end
 
-    -- ray = 120 frames of travel, the same 2 seconds the old dt-scaled *2 gave
     local pt = pong.ball_intercept(ball, predictwall, ball.dx * 120, ball.dy * 120)
 
     if (pt) then
@@ -799,26 +728,20 @@ function pong.predict(ball)
 end
 
 function pong.draw_board()
-    -- draw walls
     for x=1,#walls do
         if (walls[x].visible) then walls[x].drawf(walls[x]) end
     end
 
-    -- net
     net.drawnet()
 
-    -- hud
     draw_score()
 end
 
 function pong.draw_ball()
-    -- position is fractional and sub-pixel per frame; round only here
     local bx,by = flr(ball.x),flr(ball.y)
     rectfill(bx,by,bx+ball.radius,by+ball.radius,ball.color)
-    --circfill(ball.x, ball.y, ball.radius, ball.color)
 end
 -->8
--- dialogue system
 dialogue = {}
 
 function dialogue:new(t,c,debug)
@@ -832,10 +755,6 @@ function dialogue:new(t,c,debug)
         continuesequence=true
 	}
 
-	-- todo: review best options for storing/loading dialogue
-	-- debug dialogue creation 
-	-- between 3-5 sections
-	-- between 5-8 phrases
     if debug then
         for x=1,flr(rnd(3))+3 do 
             local section = dialogue.create_section()
@@ -885,28 +804,22 @@ end
 
 function dialogue:event(e)
 	if e == game_manager.timerevents.timer_fired then
-		-- increment phrase index
 		self.section.index += 1
 		if self.section.index > #self.section.phrases then
-			-- increment section index
 			self.index += 1
 			if self.index > #self.sections then
-				-- sequence complete, fire event for handing at game_manager
 				self.complete=true
 				gm:event(level.events.sequence_complete)
 			else
-				-- section complete, fire event for handling at level
 				gm:event(level.events.section_complete)
 			end
 		else
-			-- keep timer going and load next phrase
 			gm:event(level.events.phrase_complete)
 			self:load_next()
 		end
 	end
 end
 
---[[ textbox ]]
 textbox = {}
 textbox.__index = textbox
 textbox.states = {closed=1,opening=2,open=3,closing=4}
@@ -917,7 +830,6 @@ function textbox:new(xpos,ypos,w,h,c)
 		state=textbox.states.closed,
 		callback=nil,
 
-		-- UI box
 		rect = {
 			x0=xpos,
 			y0=ypos,
@@ -928,11 +840,9 @@ function textbox:new(xpos,ypos,w,h,c)
 		width=w,
 		height=h,
 
-		-- Debug print
 		sectiontitle='no title',
 		sectionphrase='no phrase',
 		
-		-- Customizations
 		filled=true
 	}
 	setmetatable(tb,textbox)
@@ -950,21 +860,18 @@ function textbox:draw()
 			rect(rect.x0, rect.y0, rect.x1, rect.y1, rect.color)
 		end
 
-		-- Debug print
 		if self.textvisible then
             blinkert+=1
             if blinkert > 15 then
                 blinkert = 0
                 if blinkerc == 16 then blinkerc = 32 else blinkerc = 16 end
             end
-			--print(self.sectiontitle,10,64,7)
 			print(chr(62)..' '..self.sectionphrase..' '..chr(blinkerc),rect.x0+2,rect.y0+2,7)
 		end
 	end
 end
 
 function textbox:update()
-	-- animate
 	if self.state == textbox.states.opening then
 		local done=0
 		if self.rect.x1 < self.rect.x0 + self.width then
@@ -1014,9 +921,7 @@ function textbox:close(cb)
 	self.callback=cb
 end
 -->8
--- rigid bodies
 -->8
--- diaglogue
 dialogues={}
 
 function dialogues.printdialogue(d,i)
@@ -1037,20 +942,14 @@ end
 function dialogue:changestate(s)
     local states = {
         [dialogue.states.observing] = function()
-            -- level starts with ai turned off
             gm.level.pong.ai=false;
-            -- no win/lose condition
-            -- has no dialogue options (delayed state until state change trigger)
-            -- dialog sequence starts after 2 points scored by player
             printh('observing')
         end,
         [dialogue.states.crusing] = function()
-            -- start showing dialogue and turn on ai after 4th dialogue section
             gm.level.textbox:open(function() gm:event(level.events.tb_open) end)
             printh('crusing')
         end,
         [dialogue.states.playing] = function()
-            -- play until com or player wins
             add_timer(100,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
             self.continuesequence=false
             gm.level.pong.ai=true;
@@ -1059,7 +958,6 @@ function dialogue:changestate(s)
             printh('playing')
         end,
         [dialogue.states.finish] = function()
-            -- at end of game pick win or lose message
             add_timer(100,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
             self.continuesequence=false
             gm:change_state(game_manager.states.gameover)
@@ -1079,16 +977,12 @@ end
 function dialogue:update()
     local states = {
         [dialogue.states.observing] = function()
-            -- check to see if the player has scored 2 points
-            -- if yes, change the state and start the dialogue sequence
             if hud.p2_score > 1 then self:changestate(dialogue.states.crusing) end
         end,
         [dialogue.states.crusing] = function()
-            -- turn on ai after 4th dialogue section
             if self.index > 4 then self:changestate(dialogue.states.playing) end
         end,
         [dialogue.states.playing] = function()
-            -- play until com or player wins
             if hud.p1_score > 5 then self:changestate(dialogue.states.finish) end
             if hud.p2_score > 5 then 
                 self.index+=1
@@ -1096,7 +990,6 @@ function dialogue:update()
             end
         end,
         [dialogue.states.finish] = function()
-             -- at end of game pick win or lose message
         end
     }
 
@@ -1120,21 +1013,13 @@ add(dialogue_denial.sections,section2)
 local section3 = dialogue.create_section()
 add(dialogue_denial.sections,section3)
     add(section3.phrases,dialogue.create_phrase('you know pong is a 2-player game right?',7,360))
-    --add(section3.phrases,dialogue.create_phrase('is it?...',7,50))
-   -- add(section3.phrases,dialogue.create_phrase('that you..',7,50))
     add(section3.phrases,dialogue.create_phrase('dont have any friends?',7,240))
-    --add(section3.phrases,dialogue.create_phrase('i mean if so, thats fine',7,90))
-   -- add(section3.phrases,dialogue.create_phrase('i dont have any either',7,180))
-   -- add(section3.phrases,dialogue.create_phrase('i just...',7,75))
     add(section3.phrases,dialogue.create_phrase('sorry what i mean is',7,120))
     add(section3.phrases,dialogue.create_phrase('do you want some help?',7,200))
-   -- add(section3.phrases,dialogue.create_phrase('i could play',7,150))
 local section4 = dialogue.create_section()
 add(dialogue_denial.sections,section4)
-  --  add(section4.phrases,dialogue.create_phrase('kinda excited, actually',7,120))
     add(section4.phrases,dialogue.create_phrase('never got to play before',7,360))
     add(section4.phrases,dialogue.create_phrase('i bet i am really good',7,180))
-  --  add(section4.phrases,dialogue.create_phrase('like super good, i bet',7,90))
     add(section4.phrases,dialogue.create_phrase('brb, gonna jump in real quick',7,360))
 local section5 = dialogue.create_section()
     add(dialogue_denial.sections,section5)
@@ -1142,18 +1027,15 @@ local section5 = dialogue.create_section()
     add(section5.phrases,dialogue.create_phrase('alright, this feels good',7,360))
     add(section5.phrases,dialogue.create_phrase('a little trickier than I thought',7,180))
     add(section5.phrases,dialogue.create_phrase('i will shut up now so we can play',7,180))
-    -- win
 local section6 = dialogue.create_section()
 add(dialogue_denial.sections,section6)
     add(section6.phrases,dialogue.create_phrase('see, just as i said',7,240))
     add(section6.phrases,dialogue.create_phrase('i am good at this game',7,240))
-    --lose
 local section7 = dialogue.create_section()
 add(dialogue_denial.sections,section7)
     add(section7.phrases,dialogue.create_phrase('hmm, i lost',7,240))
     add(section7.phrases,dialogue.create_phrase('thats not possible',7,240))
 
--- and the rest
 dialogues[2]=dialogue:new('anger',8,true)
 dialogues[3]=dialogue:new('bargining',9,true)
 dialogues[4]=dialogue:new('depression',1,true)
