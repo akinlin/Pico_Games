@@ -66,7 +66,7 @@ If the player wins Acceptance, COM's arc closes with a fourth-wall-breaking beat
 
 #### How COM plays — fairness as a story mechanic
 
-COM's AI difficulty is not one setting. Through Denial, Anger, Bargaining, and Depression, COM's skill **self-balances against the score** — he weakens while losing and sharpens while winning, quietly keeping the match close. In **Acceptance he stops doing this** and holds a single fixed skill level for the whole match.
+COM's AI difficulty is not one setting. Through Denial, Anger, Bargaining, and Depression, COM's skill **self-balances against the score** — he weakens as he pulls ahead and sharpens as he falls behind, quietly keeping the match close. In **Acceptance he stops doing this** and holds a single fixed skill level for the whole match.
 
 This is the mechanical expression of COM's arc. Every act up to the ending has COM adjusting himself in response to the player; acceptance is the act where he stops. The player will likely never name it, but the ending plays fair in fact, not just in dialogue.
 
@@ -157,7 +157,7 @@ This is a deliberate divergence from the original machine, which used an analog 
 
 - Palette: BG green (`3`), both paddles yellow (`10`), score/nickname bright green (`11`), ball white (`7`).
 - Nickname this act: **SKR**.
-- COM's skill self-balances against the score, but a head start selected below does **not** feed that calculation — otherwise spotting COM 10 points would hand him maximum sharpness while needing a single point to win.
+- COM's skill self-balances against the score, but a head start selected below does **not** feed that calculation — otherwise spotting COM 10 points would drop him straight to his weakest setting for the whole act, turning a handicap the player accepted into a walkover.
 - Phosphor glow enabled.
 
 **Highest code cost of any act:** unlike Denial and Anger, Bargaining carries a pre-match choice system that exists nowhere else in the game. This is a deliberate exception to the engine-footprint priority.
