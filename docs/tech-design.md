@@ -180,7 +180,7 @@ Inner-loop discipline for the swarm: cache globals and table fields into locals,
 | Component | Behavior | Key variables |
 |---|---|---|
 | Difficulty tiers | Discrete tiers, each pairing a reaction delay with an aiming error | `ai_levels[]`, `ai_reaction`, `ai_error` |
-| Tier selection | `self_balancing` mode indexes the tier by score differential, so COM weakens while losing and sharpens while winning. `fixed` mode holds one tier for the whole match | `ai_mode`, `ai_tier` |
+| Tier selection | `self_balancing` mode indexes the tier by score differential, so COM weakens as he pulls ahead and sharpens as he falls behind. `fixed` mode holds one tier for the whole match | `ai_mode`, `ai_tier` |
 | Targeting | Predicts the ball's future intercept point rather than tracking it live; re-predicts only on direction change or after enough reaction time has elapsed; jitters the aim by the current tier's error, scaled by how close the ball is | `predict()`, `predict_wall` |
 
 Acceptance is the only act that uses `fixed` mode. See Game Design → [How COM plays](#how-com-plays--fairness-as-a-story-mechanic).

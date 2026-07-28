@@ -190,7 +190,7 @@ before this means tuning against a moving target.
 **Acceptance**
 
 - With `ai_enabled = false`, COM's paddle does not move at all.
-- In `self_balancing`, COM visibly gets worse when behind and sharper when ahead.
+- In `self_balancing`, COM visibly gets worse when ahead and sharper when behind.
 - In `fixed`, COM plays the same at 0–0 and 9–10.
 - COM misses in a way that reads as human error, not as a stutter or teleport.
 

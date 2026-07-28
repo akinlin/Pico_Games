@@ -298,19 +298,25 @@ function draw_debug()
         end
     end
 
-    if (predictwall.collsionpt) then
-        rect(predictwall.collsionpt.x,predictwall.collsionpt.y,predictwall.collsionpt.x+2,predictwall.collsionpt.y+2,predictwall.collisiontextboxcolor)
-    end
     if (player1.prediction) then
-        rect(player1.prediction.x,player1.prediction.y,player1.prediction.x+2,player1.prediction.y+2,player1.collisiontextboxcolor)
+        local pr = player1.prediction
+        rect(pr.x-1,pr.y-1,pr.x+1,pr.y+1,player1.collisiontextboxcolor)
+        print(p:ai_level(),2,2,player1.collisiontextboxcolor)
     end
-
-    rect(predictwall.x,predictwall.y,predictwall.x+predictwall.width,predictwall.y+predictwall.height,8)
 end
 
 -->8
+AI_LEVELS = {
+ {12,1},{18,5},{24,10},{30,15},{36,20},{42,25},{48,30},{54,35},{60,40},
+ {66,45},{72,50},{78,55},{84,60},{90,65},{96,70},{102,75},{108,80}
+}
+AI_TIE_TIER = 9
+
 pong = {
-    ai=false
+    ai_enabled=false,
+    ai_mode='self_balancing',
+    ai_tier=AI_TIE_TIER,
+    com_handicap=0
 }
 pong.__index = pong
 function pong:new()
@@ -324,7 +330,6 @@ function pong:reset_game()
     self:init_hud()
     self:init_players()
     self:init_balls()
-    self:init_ai()
 
     gm:change_state(game_manager.states.menu)
 end
@@ -380,13 +385,9 @@ function pong:init_players()
     player1 = self:create_wall(20,paddle_starting_y,paddle_width,paddle_height)
     player1.dir = 1
     player1.prediction = nil
-    player1.level = 8
     player1.collisiontextboxcolor = 14
     player1.visible = false
     add(walls, player1)
-    predictwall = self:create_wall(player1.x,-100,player1.width,gm.screenheight+200)
-    predictwall.collisiontextboxcolor = 10
-    predictwall.drawf = function(a) rect(a.x,a.y,a.x+a.width,a.y+a.height,1) end
 
     player2 = self:create_wall(108,paddle_starting_y,paddle_width,paddle_height)
     player2.dir = 1
@@ -417,34 +418,12 @@ function pong:add_ball()
     return b
 end
 
-function pong:init_ai()
-    AILevels = {}
-    self:create_aitype(12, 1)
-    self:create_aitype(18, 5)
-    self:create_aitype(24, 10)
-    self:create_aitype(30, 15)
-    self:create_aitype(36, 20)
-    self:create_aitype(42, 25)
-    self:create_aitype(48, 30)
-    self:create_aitype(54, 35)
-    self:create_aitype(60, 40)
-    self:create_aitype(66, 45)
-    self:create_aitype(72, 50)
-    self:create_aitype(78, 55)
-    self:create_aitype(84, 60)
-    self:create_aitype(90, 65)
-    self:create_aitype(96, 70)
-    self:create_aitype(102, 75)
-    self:create_aitype(108, 80)
-end
-
-function pong:create_aitype(reaction, error)
-    a = {
-        aiReaction = reaction,
-        aiError = error
-    }
-    add(AILevels, a)
-    return a
+function pong:ai_level()
+    if (self.ai_mode == 'fixed') then
+        return mid(1, self.ai_tier, #AI_LEVELS)
+    end
+    local diff = (hud.p1_score - self.com_handicap) - hud.p2_score
+    return mid(1, AI_TIE_TIER + diff, #AI_LEVELS)
 end
 
 function pong:create_prediction(s,dx,r,ex,ey,x,y,d)
@@ -496,20 +475,14 @@ function pong:update_game_state()
         end
     end
 
-    if self.ai then pong.run_ai(balls[1]) end
+    if self.ai_enabled then self:run_ai(balls[1]) end
 end
 
 function pong.score_point(b)
     if (b.dx > 0) then
         hud.p1_score += 1
-        if (player1.level < 17) then
-            player1.level += 1
-        end
     else
         hud.p2_score += 1
-        if (player1.level > 1) then
-            player1.level -= 1
-        end
     end
     pong.begin_serve(b)
 end
@@ -662,16 +635,6 @@ function pong.ball_intercept(ball, paddle, nx, ny)
 end
 
 function pong.intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
-    if (x1 > 140) then x1 = 140 elseif (x1 < -50) then x1 = -50 end
-    if (x2 > 140) then x2 = 140 elseif (x2 < -50) then x2 = -50 end
-    if (x3 > 140) then x3 = 140 elseif (x3 < -50) then x3 = -50 end
-    if (x4 > 140) then x4 = 140 elseif (x4 < -50) then x4 = -50 end
-     
-    if (y1 > 140) then y1 = 140 elseif (y1 < -50) then y1 = -50 end
-    if (y2 > 140) then y2 = 140 elseif (y2 < -50) then y2 = -50 end
-    if (y3 > 140) then y3 = 140 elseif (y3 < -50) then y3 = -50 end
-    if (y4 > 140) then y4 = 140 elseif (y4 < -50) then y4 = -50 end
-
     local denom = ((x1-x2) * (y3 -y4)) - ((y1-y2) * (x3-x4))
     if (denom != 0) then
         local ua = (((x1-x3) * (y3-y4)) - ((y1-y3) * (x3-x4))) / denom
@@ -687,19 +650,21 @@ function pong.intercept(x1, y1, x2, y2, x3, y3, x4, y4, d)
     return nil
 end
 
-function pong.run_ai(ball)
-    if (((ball.x < player1.x) and (ball.dx < 0)) or
-        ((ball.x > player1.x+player1.width) and (ball.dx > 0))) then
+function pong:run_ai(b)
+    if (b.dx >= 0) or (b.serving > 0) then
         player1.dir = 0
+        player1.prediction = nil
         return
     end
 
-    pong.predict(ball)
+    self:predict(b)
 
-    if (player1.prediction) then
-        if (player1.prediction.y < (player1.y + player1.height/2 - 2)) then
+    local pr = player1.prediction
+    if pr then
+        local c = player1.y + player1.height/2
+        if (pr.y < c - 2) then
             player1.dir = -1
-        elseif (player1.prediction.y > ((player1.y+player1.height) - player1.height/2 + 2)) then
+        elseif (pr.y > c + 2) then
             player1.dir = 1
         else
             player1.dir = 0
@@ -714,48 +679,37 @@ function pong.run_ai(ball)
     end
 end
 
-function pong.predict(ball)
-    if (player1.prediction) then
-        if ((player1.prediction.dx * ball.dx) > 0) and
-            ((player1.prediction.dy * ball.dy) > 0) and
-            (player1.prediction.since < AILevels[player1.level].aiReaction) then
-                player1.prediction.since += 1
-                return
+function pong:predict(b)
+    local lvl = AI_LEVELS[self:ai_level()]
+    local pr = player1.prediction
+    if pr and ((pr.dx * b.dx) > 0) and ((pr.dy * b.dy) > 0)
+        and (pr.since < lvl[1]) then
+        pr.since += 1
+        return
+    end
+
+    local face = player1.x + player1.width + b.radius
+    local y = b.y + b.dy * ((face - b.x) / b.dx)
+
+    local t = b.radius
+    local bot = PLAYFIELD_BOTTOM - b.radius + 1
+    while (y < t) or (y > bot) do
+        if (y < t) then
+            y = t + (t - y)
+        else
+            y = bot + (bot - y)
         end
     end
 
-    local pt = pong.ball_intercept(ball, predictwall, ball.dx * 120, ball.dy * 120)
-
-    if (pt) then
-        predictwall.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
-        local t = ball.radius
-        local b = PLAYFIELD_BOTTOM - ball.radius + 1
-
-        while ((pt.y < t) or (pt.y > b)) do
-            if (pt.y < t) then
-                pt.y = t + (t - pt.y)
-            elseif (pt.y > b) then
-                pt.y = t + (b - t) - (pt.y - b)
-            end
-        end
-        player1.prediction = {x=pt.x,y=pt.y,d=pt.d}
-    else
-        player1.prediction = nil
-        predictwall.collsionpt = nil
-    end
-
-    if (player1.prediction) then
-        player1.prediction.since = 0
-        player1.prediction.dx = ball.dx
-        player1.prediction.dy = ball.dy
-        player1.prediction.radius = ball.radius
-        player1.prediction.exactX = player1.prediction.x
-        player1.prediction.exactY = player1.prediction.y
-        local closeness = 0
-        if (ball.dx < 0) then closeness = (ball.x - (player1.x+player1.width)) / gm.screenwidth else closeness = (player1.x - ball.x) / gm.screenwidth end
-        local error = AILevels[player1.level].aiError * closeness
-        player1.prediction.y = player1.prediction.y + (rnd(error*2) - error)
-    end
+    local closeness = (b.x - face) / gm.screenwidth
+    local err = lvl[2] * closeness
+    player1.prediction = {
+        x=face,
+        y=y + (rnd(err*2) - err),
+        since=0,
+        dx=b.dx,
+        dy=b.dy
+    }
 end
 
 function pong.draw_board()
@@ -979,7 +933,7 @@ end
 function dialogue:changestate(s)
     local states = {
         [dialogue.states.observing] = function()
-            gm.level.pong.ai=false;
+            gm.level.pong.ai_enabled=false;
             printh('observing')
         end,
         [dialogue.states.crusing] = function()
@@ -989,7 +943,7 @@ function dialogue:changestate(s)
         [dialogue.states.playing] = function()
             add_timer(100,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
             self.continuesequence=false
-            gm.level.pong.ai=true;
+            gm.level.pong.ai_enabled=true;
             hud.p1_score=0
             hud.p2_score=0
             printh('playing')
