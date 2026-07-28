@@ -13,6 +13,8 @@ BALL_SPEEDS = {0.341, 0.683, 1.024}
 BALL_HITS_MAX = 12
 BALL_VZONES = {-1.171,-0.780,-0.390,0,0,0.390,0.780,1.171}
 BALL_ZONE_SIZE = 0.75
+SERVE_DELAY = 102
+SERVE_X = 66
 PADDLE_MIN_Y = 6
 PADDLE_MAX_Y = 84
 
@@ -394,23 +396,16 @@ end
 
 function pong:init_ball()
     local rad = 1
-    local nx = rad
-    local ny = 0
-    local xx = gm.screenwidth - rad
-    local xy = PLAYFIELD_BOTTOM - rad
 
     ball = {
         radius = rad,
         color = 6,
-        minx = nx,
-        miny = ny,
-        maxx = xx,
-        maxy = xy,
-        x = 64,
-        y = rnd(xy),
+        x = SERVE_X,
+        y = rnd(PLAYFIELD_BOTTOM - rad),
         hits = 0,
+        serving = 0,
         dx = BALL_SPEEDS[1] * coin_flip(),
-        dy = (xy - ny) / (flr(rnd(7)+1) * coin_flip() * 60)
+        dy = BALL_VZONES[8] * coin_flip()
     }
 end
 
@@ -481,27 +476,56 @@ end
 function pong:update_game_state()
     pong.handle_game_input()
 
-    if (ball.x > -ball.radius) and (ball.x < gm.screenwidth + ball.radius) and 
+    if (ball.serving > 0) then
+        pong.update_serve()
+    elseif (ball.x > -ball.radius) and (ball.x < gm.screenwidth + ball.radius) and
         (ball.y < PLAYFIELD_BOTTOM+ball.radius) and (ball.y > -ball.radius) then
         pong.update_ball()
     else
-        if (ball.dx > 0) then 
+        if (ball.dx > 0) then
             hud.p1_score += 1
             if (player1.level < 17) then
                 player1.level += 1
             end
-        else 
+        else
             hud.p2_score += 1
             if (player1.level > 1) then
                 player1.level -= 1
             end
         end
-        if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then 
+        if (hud.p1_score == SCORE_TO_WIN) or (hud.p2_score == SCORE_TO_WIN) then
         end
-        p:init_ball()
+        pong.begin_serve()
     end
 
     if self.ai then pong.run_ai(ball) end
+end
+
+function pong.begin_serve()
+    ball.serving = SERVE_DELAY
+    ball.hits = 0
+end
+
+function pong.update_serve()
+    local maxy = PLAYFIELD_BOTTOM - ball.radius
+    ball.y += ball.dy
+    if (ball.y < 0) then
+        ball.y = -ball.y
+        ball.dy = -ball.dy
+    elseif (ball.y > maxy) then
+        ball.y = (maxy*2) - ball.y
+        ball.dy = -ball.dy
+    end
+
+    ball.serving -= 1
+    if (ball.serving <= 0) then
+        ball.x = SERVE_X
+        if (ball.dx < 0) then
+            ball.dx = -BALL_SPEEDS[1]
+        else
+            ball.dx = BALL_SPEEDS[1]
+        end
+    end
 end
 
 function pong.handle_game_input()
@@ -725,6 +749,7 @@ function pong.draw_board()
 end
 
 function pong.draw_ball()
+    if (ball.serving > 0) then return end
     local bx,by = flr(ball.x),flr(ball.y)
     rectfill(bx,by,bx+ball.radius,by+ball.radius,ball.color)
 end
