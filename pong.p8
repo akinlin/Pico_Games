@@ -10,6 +10,17 @@ SCORE_TO_WIN = 11
 
 PADDLE_SPEED = 2
 
+-- playfield is rows 0-95, terminal band is 96-127
+PLAYFIELD_BOTTOM = 95
+
+-- horizontal speed is three discrete tiers off the rally hit counter,
+-- not continuous acceleration. counter saturates at 12.
+BALL_SPEEDS = {0.341, 0.683, 1.024}
+BALL_HITS_MAX = 12
+-- paddle top-edge travel: one paddle height of dead zone at each end
+PADDLE_MIN_Y = 6
+PADDLE_MAX_Y = 84
+
 -- [[ HELPER FUNCTIONS ]]
 function coin_flip()
     if rnd(2) > 1 then
@@ -257,7 +268,8 @@ function _init()
     gm.screenwidth = 128
     gm.screenheight = 128
 	-- create textbox object
-	tb = textbox:new(0,120,128,2,12)
+	-- terminal band: rows 96-127
+	tb = textbox:new(0,96,127,31,12)
     -- create pong object
     p = pong:new()
     p:reset_game()
@@ -307,7 +319,9 @@ function draw_score()
     -- clear all flags, including enable
     --poke(0x5f58, 0)
 
-    print("\^p" .. hud.p1_score,hud.p1_x,hud.p1_y,hud.p1_color)
+    -- \^p is pinball mode: each glyph is 8px wide. the left score is right-aligned on
+    -- its inner edge so both fields stay symmetric about the net at any digit count.
+    print("\^p" .. hud.p1_score,hud.p1_x-(#tostr(hud.p1_score)*8),hud.p1_y,hud.p1_color)
     print("\^p" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
 end
 
@@ -356,10 +370,13 @@ end
 
 function pong:init_board()
     walls = {}
+    -- bounds are collidable but never drawn: the bottom one sits inside the band
     local top = self:create_wall(0,-4,gm.screenwidth,3)
+    top.visible = false
     add(walls, top)
 
-    local bottom = self:create_wall(0,gm.screenheight,gm.screenwidth,3)
+    local bottom = self:create_wall(0,PLAYFIELD_BOTTOM,gm.screenwidth,3)
+    bottom.visible = false
     add(walls, bottom)
 
     self:init_net()
@@ -370,12 +387,12 @@ function pong:init_net()
         block_width = 0,
         block_height = 1,
         block_space = 3,
-        x = 58,
+        x = 64,
         y = 0,
         color = 6,
         drawnet = function()
             ypos = net.y
-            while (ypos < 128) do
+            while (ypos + net.block_height <= PLAYFIELD_BOTTOM) do
                 rectfill(net.x,ypos,net.x+net.block_width,ypos+net.block_height,net.color)
                 ypos += net.block_height + net.block_space
             end
@@ -385,24 +402,27 @@ end
 
 function pong:init_hud()
     hud = {
+        -- score fields sit 22-44px either side of the net, scaled from the original's
+        -- H 128-191 / H 320-383. p1_x is its field's inner edge, not its left edge.
         p1_score = 0,
-        p1_x = 25,
-        p1_y = 10,
+        p1_x = 42,
+        p1_y = 8,
         p1_color = 7,
         -- p2 is human player
         p2_score = 0,
-        p2_x = 115,
-        p2_y = 10,
+        p2_x = 87,
+        p2_y = 8,
         p2_color = 7,
     }
 end
 
 function pong:init_players()
     -- player paddels are added to the walls array for rendering
-    local paddle_width = 1
+    -- create_wall draws x..x+width inclusive, so 0/5 renders the spec's 1x6 px paddle
+    local paddle_width = 0
     local paddle_height = 5
-    local paddle_starting_y = (gm.screenheight/2)-(paddle_height/2)
-    player1 = self:create_wall(3,paddle_starting_y,paddle_width,paddle_height)
+    local paddle_starting_y = ((PLAYFIELD_BOTTOM+1)/2)-((paddle_height+1)/2)
+    player1 = self:create_wall(20,paddle_starting_y,paddle_width,paddle_height)
     player1.dir = 1
     -- in a 1 player game player1 is ai, add prediction member
     player1.prediction = nil
@@ -416,7 +436,7 @@ function pong:init_players()
     predictwall.drawf = function(a) rect(a.x,a.y,a.x+a.width,a.y+a.height,1) end
 
     -- player 2 is always a human player
-    player2 = self:create_wall(gm.screenwidth-paddle_width-8,paddle_starting_y,paddle_width,paddle_height)
+    player2 = self:create_wall(108,paddle_starting_y,paddle_width,paddle_height)
     player2.dir = 1
     player2.visible = false
     add(walls, player2)
@@ -425,9 +445,10 @@ end
 function pong:init_ball()
     local rad = 1
     local nx = rad
-    local ny = 3 + rad
+    local ny = 0
     local xx = gm.screenwidth - rad
-    local xy = gm.screenheight - 3 - rad
+    -- ball.y is a top-left corner, so the lowest legal value keeps row y+1 inside the playfield
+    local xy = PLAYFIELD_BOTTOM - rad
 
     ball = {
         radius = rad,
@@ -438,8 +459,10 @@ function pong:init_ball()
         maxy = xy,
         x = 64,
         y = rnd(xy),
-        -- per-frame velocity: old px/sec source over 60. m2 replaces this with the tier model.
-        dx = (xx - nx) / (flr(rnd(7)+1) * coin_flip() * 60),
+        -- rally hit counter drives horizontal speed; a fresh ball always starts at tier 1
+        hits = 0,
+        dx = BALL_SPEEDS[1] * coin_flip(),
+        -- placeholder: m3's 8-zone table replaces vertical velocity
         dy = (xy - ny) / (flr(rnd(7)+1) * coin_flip() * 60)
     }
 end
@@ -514,7 +537,7 @@ function pong:update_game_state()
 
     -- todo: check if ball is in the safe zone
     if (ball.x > -ball.radius) and (ball.x < gm.screenwidth + ball.radius) and 
-        (ball.y < gm.screenheight+ball.radius) and (ball.y > -ball.radius) then 
+        (ball.y < PLAYFIELD_BOTTOM+ball.radius) and (ball.y > -ball.radius) then
         pong.update_ball()
     else
         if (ball.dx > 0) then 
@@ -542,23 +565,29 @@ end
 function pong.handle_game_input()
     local inputdx = 0
     if (btn(⬇️)) then
-        if (player2.y < gm.screenheight - player2.height - 3) then
+        if (player2.y < PADDLE_MAX_Y) then
             player2.dir = 1
             inputdx = PADDLE_SPEED
         else
-            player2.y = gm.screenheight - player2.height - 3
+            player2.y = PADDLE_MAX_Y
         end
     end
 
     if (btn(⬆️)) then
-        if (player2.y > 3) then
+        if (player2.y > PADDLE_MIN_Y) then
             player2.dir = -1
             inputdx = PADDLE_SPEED
         else
-            player2.y = 3
+            player2.y = PADDLE_MIN_Y
         end
     end
     player2.y += (inputdx*player2.dir)
+end
+
+function pong.speed_tier(hits)
+    if (hits >= BALL_HITS_MAX) then return 3 end
+    if (hits >= 4) then return 2 end
+    return 1
 end
 
 function pong.update_ball()
@@ -569,11 +598,13 @@ function pong.update_ball()
     -- loop all walls until a collsion is detected
     local x = 1
     local pt = nil
+    local hitwall = nil
     while (pt == nil) and (x <= #walls) do
         if (walls[x].collsion) then
             pt = pong.ball_intercept(ball, walls[x], nx, ny)
             if (pt) then
                 walls[x].collsionpt = {x=pt.x,y=pt.y,d=pt.d}
+                hitwall = walls[x]
             end
         end
         x += 1
@@ -587,6 +618,14 @@ function pong.update_ball()
             pos.y = pt.y
             pos.dy = -pos.dy
         end
+    end
+
+    -- a paddle contact is a rally hit: advance the counter, then restate the
+    -- horizontal speed from its tier. the bounce above already set the sign.
+    if (hitwall == player1) or (hitwall == player2) then
+        if (ball.hits < BALL_HITS_MAX) then ball.hits += 1 end
+        local spd = BALL_SPEEDS[pong.speed_tier(ball.hits)]
+        if (pos.dx < 0) then pos.dx = -spd else pos.dx = spd end
     end
 
     -- add/remove spin based on paddle direction
@@ -705,11 +744,11 @@ function pong.run_ai(ball)
         end
     end
     player1.y += (PADDLE_SPEED*player1.dir)
-    if (player1.y < 3) then
-        player1.y = 3
+    if (player1.y < PADDLE_MIN_Y) then
+        player1.y = PADDLE_MIN_Y
     end
-    if (player1.y > gm.screenheight - player1.height - 3) then
-        player1.y = gm.screenheight - player1.height - 3
+    if (player1.y > PADDLE_MAX_Y) then
+        player1.y = PADDLE_MAX_Y
     end
 end
 
@@ -729,8 +768,8 @@ function pong.predict(ball)
 
     if (pt) then
         predictwall.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
-        local t = 3 + ball.radius
-        local b = gm.screenheight - 3 - ball.radius
+        local t = 0
+        local b = PLAYFIELD_BOTTOM - ball.radius
 
         while ((pt.y < t) or (pt.y > b)) do
             if (pt.y < t) then
@@ -773,7 +812,9 @@ function pong.draw_board()
 end
 
 function pong.draw_ball()
-    rectfill(ball.x,ball.y,ball.x+ball.radius,ball.y+ball.radius,ball.color)
+    -- position is fractional and sub-pixel per frame; round only here
+    local bx,by = flr(ball.x),flr(ball.y)
+    rectfill(bx,by,bx+ball.radius,by+ball.radius,ball.color)
     --circfill(ball.x, ball.y, ball.radius, ball.color)
 end
 -->8
