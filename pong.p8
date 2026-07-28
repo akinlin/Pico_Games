@@ -101,8 +101,30 @@ function game_manager:reset()
 end
 
 function game_manager:change_state(s)
-	self.state = s
-    printh('game_manager:change_state: '..s)
+    local states = {
+		[game_manager.states.title] = function()
+            title.reset()
+        end,
+        [game_manager.states.menu] = function()
+        end,
+        [game_manager.states.options] = function()
+        end,
+        [game_manager.states.level] = function()
+        end,
+        [game_manager.states.gameover] = function()
+        end,
+        [game_manager.states.intermission] = function()
+        end
+	}
+
+	local state = states[s]
+    if state then
+        state()
+        self.state = s
+        printh('game_manager:change_state: '..s)
+    else
+		printh('no state found to change state to: '..s)
+    end
 end
 
 function game_manager:add_level(l)
@@ -132,18 +154,24 @@ function game_manager:event(e)
     end
 end
 
-function game_manager:input(e)
-	local inputevents = {
-		[game_manager.inputevents.key_pressed] = function()
-            printh('game_manager:input: key_pressed')
-            printh('self.state: '..self.state)
-            printh('max states: '..game_manager.states.size)
-            if self.state < game_manager.states.size then
-                self:change_state(self.state+1)
-            else
-                self:reset()
-            end
-            --[[
+function game_manager:input(i)
+    local states = {
+		[game_manager.states.title] = function()
+            title.input(i)
+        end,
+        --[game_manager.states.menu] = function()
+        --end,
+        --[game_manager.states.options] = function()
+        --end,
+        [game_manager.states.level] = function()
+            self.level:event(i)
+        end,
+        --[game_manager.states.gameover] = function()
+        --end,
+        --[game_manager.states.intermission] = function()
+        --end
+
+        --[[
 			if self.state == game_manager.states.menu or game_manager.states.intermission then
 				if self.level_index <= #self.levels then
 					self:change_state(game_manager.states.level)
@@ -160,41 +188,40 @@ function game_manager:input(e)
                 --self.level:load()
             end
             ]]
-        end
 	}
 
-	local input = inputevents[e]
-    if input then
-        input()
-    elseif self.state == game_manager.states.level then
-		self.level:event(e)
+    local state = states[s]
+    if state then
+        state()
+    else
+        if i == game_manager.inputevents.key_pressed then
+            if self.state < game_manager.states.size then
+                self:change_state(self.state+1)
+            else
+                self:reset()
+            end
+        end
     end
 end
 
 function game_manager:update() 
     --update_timers()
 
-    --[[
     local states = {
 		[game_manager.states.title] = function()
-			printh('game_manager update title')
+            title.update()
         end,
 		[game_manager.states.menu] = function()
-			printh('game_manager update menu')
         end,
 		[game_manager.states.options] = function()
-			printh('game_manager update options')
         end,
         [game_manager.states.level] = function()
-            printh('game_manager update level')
             --self.level:update()
         end,
 		[game_manager.states.gameover] = function()
-			printh('game_manager update gameover')
             --self.level.textbox:update()
 		end,
 		[game_manager.states.intermission] = function()
-            printh('game_manager update intermission')
             --self.level.pong:update_game_state()
 		end
 	}
@@ -205,7 +232,6 @@ function game_manager:update()
     else
         printh('no update state for '..self.state)
     end
-    ]]
 end
 
 function game_manager:draw()
@@ -213,7 +239,7 @@ function game_manager:draw()
 
 	local states = {
 		[game_manager.states.title] = function()
-			print("title",44,60)
+			title.draw()
         end,
 		[game_manager.states.menu] = function()
 			print("press ❎ to start",32,64,7)
@@ -242,6 +268,22 @@ function game_manager:draw()
     else
         printh('no draw state for '..self.state)
     end
+end
+
+--[[ TITLE ]]
+title = {}
+function title.reset()
+end
+
+function title.input(i)
+    gm:change_state(game_manager.states.menu)
+end
+
+function title.update()
+end
+
+function title.draw()
+    print("title",44,60)
 end
 
 --[[ INIT ]]
