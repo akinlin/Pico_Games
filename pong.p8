@@ -795,6 +795,10 @@ function pong:update_ball(b)
     end
 
     if (hitwall == player1) or (hitwall == player2) then
+        if (pt.d != "left" and pt.d != "right") then
+            px = pt.x
+            ndx = -nx
+        end
         if (b.hits < BALL_HITS_MAX) then b.hits += 1 end
         local ti = self:speed_tier(b.hits)
         if (b.mode == "slow_fast") ti = ndx > 0 and 1 or 3
@@ -843,9 +847,9 @@ function pong.ball_intercept(ball, paddle, nx, ny)
     if (pt == nil) then
         if (ny < 0) then
             pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
-                            (paddle.x+paddle.width)   - ball.radius, 
+                            paddle.x - ball.radius, 
                             (paddle.y+paddle.height) + ball.radius, 
-                            paddle.x  + ball.radius, 
+                            (paddle.x+paddle.width) + ball.radius, 
                             (paddle.y+paddle.height) + ball.radius,
                             "bottom")
         elseif (ny > 0) then
