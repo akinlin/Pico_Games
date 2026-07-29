@@ -386,7 +386,7 @@ from commit messages.
 
 | Area | Issue |
 |---|---|
-| Collision | **The ball passes through paddle corners.** `ball_intercept` resolves a `top`/`bottom` face hit by flipping `dy` only, so a ball clipping the paddle's end keeps its horizontal direction and continues through. M5's acceptance passed because corner contacts were rare with a 2 px-quantized paddle; M8's fractional paddle makes them common enough to hit regularly. Affects evaluation of the zone system at the paddle rims |
+| Collision | ~~The ball passes through paddle corners.~~ **Fixed in M8** (`031ac98`) — and it was two separate defects. (1) *Detected but misresolved:* a `top`/`bottom` face contact flipped `dy` only and left `dx` unchanged, so the tier block restated `dx` with the unflipped sign and the ball carried through. Paddle contacts now always reverse horizontally, which is what the hardware does — it detects coincidence with a rectangular region rather than having faces at all. (2) *Never detected:* the bottom face was **inset** by the ball radius where the top face is **expanded**, leaving a 1 px notch at each bottom corner. Predates the rework. Verified by exhaustive sweep over all 42 velocity vectors, entries from outside the paddle rect only: 0 tunnelling gaps |
 
 ---
 
