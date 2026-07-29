@@ -206,7 +206,7 @@ before this means tuning against a moving target.
   together via `memcpy(0x5f10,…)` and `memcpy(0x5f60,…)` on act load.
 - Scanlines on permanently: `poke(0x5f5f, 0x10)` + the `0x5f70`–`0x5f7f` bitfield, set
   once at boot.
-- Phosphor frame-blend as a toggleable per-act axis.
+- Phosphor as a toggleable per-act axis. Split into M7a (palettes, scanlines) and M7b (phosphor) because neither is verifiable headlessly and a single "the visuals look wrong" report would not say which half broke.
 - Act palettes per Game Design. **Denial takes no override. Depression's ball is white
   (`7`), not purple** — #29's body is wrong on that.
 
@@ -215,7 +215,7 @@ before this means tuning against a moving target.
 - Scanlines visible in every act, including `attract`.
 - Forcing each act's palette by hand recolors the whole frame in one go — including
   the scanlines, which must match the act rather than staying the previous act's color.
-- Phosphor visibly trails the ball when on, and turning it off changes nothing else.
+- Phosphor visibly trails the ball when on, and turning it off changes nothing else. `full` mode's effect on animated dialogue text cannot be judged until M10 gives the text a letter-by-letter reveal; both modes ship and the choice is deferred.
 - `fillp` is not used anywhere (it collides with the scanline palette).
 
 ---
@@ -233,7 +233,7 @@ This is the milestone the whole plan is built around. Everything above becomes a
   `speed_tier_pin`, `win_score_player`, `win_score_com`, `sudden_death`,
   `scoring_model`, `score_multiplier_com`, `initial_score_com`, `scoring_enabled`,
   `com_serves_every_point`, `ai_enabled`, `ai_mode`, `ai_tier`, `palette`, `nickname`,
-  `phosphor_enabled`.
+  `phosphor_mode` (`off`/`ball`/`full`).
 - Apply on `level` load. **One engine, parameterized — never fork it.**
 - Collapse `game_manager`'s six states to `attract` and `level`.
 - Player paddle control: buttons with acceleration/momentum. Curve and max speed are

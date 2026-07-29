@@ -22,6 +22,8 @@ C_BG = 0
 C_PADDLE = 1
 C_BALL = 2
 C_SCORE = 3
+C_TRAIL1 = 4
+C_TRAIL2 = 5
 
 DEBUG_ACT = nil
 
@@ -29,24 +31,26 @@ SCORE_Y = 8
 SCORE_H = 12
 
 ACT_PALETTES = {
- {0,7,7,7,   6},
- {8,9,7,10,  9},
- {3,10,7,11, 1},
- {1,5,7,12,  13},
- {5,6,7,9,   4}
+ {0,7,7,7,    6,5,    6},
+ {8,9,7,10,   15,9,   9},
+ {3,10,7,11,  6,11,   1},
+ {1,5,7,12,   12,13,  13},
+ {5,6,7,9,    6,5,    4}
 }
+
+ACT_PHOSPHOR = {1,0,1,1,1}
 
 
 
 SCAN_PATTERN = {0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01}
 
 CRAWL_RATE = 12
-crt = {phase=0, st=0, ty=-1, tw=240}
+crt = {phase=0, st=0, ty=-1, tw=240, phos=1, tlen=2, cpu=false}
 
 function set_palette(n)
     local a = ACT_PALETTES[mid(1,DEBUG_ACT or n,#ACT_PALETTES)]
-    poke(0x5f10, a[1],a[2],a[3],a[4], 4,5,6,7,8,9,10,11,12,13,14,15)
-    poke(0x5f60, a[1],a[2],a[3],a[5], 4,5,6,7,8,9,10,11,12,13,14,15)
+    poke(0x5f10, a[1],a[2],a[3],a[4],a[5],a[6], 6,7,8,9,10,11,12,13,14,15)
+    poke(0x5f60, a[1],a[2],a[3],a[7],a[5],a[6], 6,7,8,9,10,11,12,13,14,15)
 end
 
 function set_scanlines()
@@ -64,11 +68,28 @@ function init_crt()
     set_scanlines()
 end
 
+PHOS_NAMES = {"off","ball","full"}
+
 function init_menu()
     menuitem(1,"act "..(DEBUG_ACT or "auto"),function()
         DEBUG_ACT = (DEBUG_ACT or 0) + 1
         if (DEBUG_ACT > #ACT_PALETTES) DEBUG_ACT = nil
         set_palette(gm.level_index)
+        init_menu()
+        return true
+    end)
+    menuitem(2,"phosphor "..PHOS_NAMES[crt.phos+1],function()
+        crt.phos = (crt.phos + 1) % 3
+        init_menu()
+        return true
+    end)
+    menuitem(3,"trail "..crt.tlen,function()
+        crt.tlen = (crt.tlen % 2) + 1
+        init_menu()
+        return true
+    end)
+    menuitem(4,"cpu "..(crt.cpu and "on" or "off"),function()
+        crt.cpu = not crt.cpu
         init_menu()
         return true
     end)
@@ -276,6 +297,7 @@ function level:load()
 	self.textbox.sectionphrase=self.dialogue.phrase.text
 	self.textbox.rect.color=C_BG
     set_palette(gm.level_index)
+    crt.phos = ACT_PHOSPHOR[mid(1,DEBUG_ACT or gm.level_index,#ACT_PHOSPHOR)]
     self.dialogue:init()
 
     player1.visible = true
@@ -372,10 +394,21 @@ function update_gameover_state()
 end
 
 function _draw()
-	cls(0)
+    if crt.phos == 2 then
+        pal(1,C_TRAIL1) pal(2,C_TRAIL1) pal(3,C_TRAIL1)
+        pal(C_TRAIL1,C_TRAIL2) pal(C_TRAIL2,C_BG)
+        sspr(0,0,128,128,0,0)
+        pal(1,1) pal(2,2) pal(3,3)
+        pal(C_TRAIL1,C_TRAIL1) pal(C_TRAIL2,C_TRAIL2)
+    else
+        cls(C_BG)
+    end
 
     gm:draw()
     apply_tear()
+
+    if (crt.phos == 2) memcpy(0x0000,0x6000,0x2000)
+    if (crt.cpu) print(flr(stat(1)*100).."%",1,1,C_SCORE)
 end
 
 function draw_score()
@@ -509,6 +542,13 @@ function pong:add_ball()
         y = rad + rnd(PLAYFIELD_BOTTOM - rad - rad),
         hits = 0,
         serving = 0,
+        tc = 0,
+        t1x = SERVE_X,
+        t1y = 0,
+        t2x = SERVE_X,
+        t2y = 0,
+        t3x = SERVE_X,
+        t3y = 0,
         dx = BALL_SPEEDS[1] * coin_flip(),
         dy = BALL_VZONES[8] * coin_flip()
     }
@@ -692,6 +732,16 @@ function pong.update_ball(b)
     b.y = py
     b.dx = ndx
     b.dy = ndy
+
+    if crt.phos == 1 then
+        b.tc += 1
+        if b.tc >= 3 then
+            b.tc = 0
+            b.t3x,b.t3y = b.t2x,b.t2y
+            b.t2x,b.t2y = b.t1x,b.t1y
+            b.t1x,b.t1y = px,py
+        end
+    end
 end
 
 function pong.ball_intercept(ball, paddle, nx, ny)
@@ -825,6 +875,16 @@ function pong.draw_balls()
         local b = balls[i]
         if (b.serving <= 0) then
             local r = b.radius
+            local bx0,by0 = flr(b.x),flr(b.y)
+            if crt.phos == 1 and
+                abs(flr(b.t2x)-bx0) + abs(flr(b.t2y)-by0) >= 2 then
+                if crt.tlen > 1 then
+                    local x2,y2 = flr(b.t3x)-r,flr(b.t3y)-r
+                    rectfill(x2,y2,x2+r+r-1,y2+r+r-1,C_TRAIL2)
+                end
+                local x1,y1 = flr(b.t2x)-r,flr(b.t2y)-r
+                rectfill(x1,y1,x1+r+r-1,y1+r+r-1,C_TRAIL1)
+            end
             local bx,by = flr(b.x)-r,flr(b.y)-r
             rectfill(bx,by,bx+r+r-1,by+r+r-1,b.color)
         end

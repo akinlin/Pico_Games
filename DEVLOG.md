@@ -252,6 +252,53 @@ milestone. For anything only a human eye can judge, shipping the *options* and l
 the user compare beat any amount of describing them in prose. Glow and net drift were
 both cut after a minute of looking at them; neither would have been settled by argument.
 
+## M7b — Phosphor
+
+What we're chasing here isn't a graphical effect so much as a physical fact: a CRT's
+phosphor keeps glowing after the electron beam has moved on. On the original machine the
+ball doesn't travel across the screen so much as it *smears* — a bright point dragging a
+brief afterglow behind it. It's one of the reasons footage of real Pong looks alive in a
+way a crisp emulator doesn't.
+
+Two ways to fake it, and they turn out to be different design choices rather than
+different implementations of the same idea. You can trail *the ball* — cheap, precise,
+and it leaves everything else clean. Or you can blend the whole previous frame under the
+new one, which is what an actual phosphor does: everything that moves glows, including
+the score digits ticking over and the dialogue text as it types itself out. Built both.
+The second is more honest to the hardware and possibly the nicer of the two, but the
+verdict has to wait — the dialogue doesn't animate yet, so the thing most likely to make
+full-frame blending unpleasant literally cannot be seen.
+
+**The accident we kept.** In full-frame mode the previous frame gets stashed in unused
+sprite memory. On the very first frame there's no previous frame — just whatever
+leftover data happened to be sitting there — so the game opens on a flash of garbage
+before the first real frame overwrites it. A bug, unambiguously. It also reads exactly
+like an old machine warming up, so it stays.
+
+**What the trail taught us about slowness.** The first version drew a tail behind the
+ball at all times, and at the slowest rally speed it looked wrong in a way that took a
+while to name. The tail wasn't too long — it was too *close*. A ball creeping along at a
+third of a pixel per frame leaves its afterglow almost exactly where it already is, so
+instead of a comet you get a slightly swollen ball. The fix was to let the trail vanish
+whenever the ball hasn't travelled far enough to separate from it, which is also what
+a real tube does: a slow-moving spot sits inside its own glow and simply looks brighter.
+The smear needs the beam to have actually gone somewhere. So the effect now arrives with
+speed and disappears in the slow, flat rallies — which is exactly when the original
+machine looks calmest too.
+
+**The cost of nostalgia, measured.** Blending the entire previous frame costs 29% of
+everything the machine can do in a frame. Trailing just the ball costs 4%. Both look
+good; only one leaves room for the moment, several acts later, when the screen fills
+with balls. That act turns the glow off, and the design had always said so — but it's
+a different thing to read that in a plan than to watch the number climb.
+
+**The one-line bug that repainted the whole game.** Resetting the drawing palette after
+compositing turned out to reset *every* palette, including the one holding the current
+act's entire color scheme. The symptom was that full-frame mode ignored whichever act
+you'd chosen and rendered everything in green-on-black — which, entirely by accident, is
+about the most stereotypically "old computer terminal" pairing available. Briefly
+tempting. Not what the act called for.
+
 ---
 
 ## Running notes for the post-mortem
