@@ -328,3 +328,4 @@ Ideas and future considerations, kept here instead of quietly dropped:
 - Letting gameplay continue during Anger's and Bargaining's gated dialogue rather than pausing it.
 - Randomizing which of the Bargaining choice options appear, rather than the fixed set.
 - Anger's swarm as a single all-at-once wave rather than staggered groups — more overwhelming, harder to read.
+- **CRT treatment as a player-facing option rather than always-on.** Scanlines are currently specified as permanent for every act. At 128×128 they cannot be faithful — the original's 246 scanlines map onto 96 rows, so one Meta Pong pixel is ~2.56 original scanlines and a real scanline pair is finer than a single pixel we can draw. Any scanline we render is therefore roughly 2.5× too coarse and reads as an applied effect rather than as the picture. Offering density, or the CRT treatment as a whole, as a toggle would turn that limitation into variety instead of a compromise. Deferred, not rejected.

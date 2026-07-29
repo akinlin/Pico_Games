@@ -1,0 +1,269 @@
+# Meta Pong — Dev Log
+
+Raw material for a **making-of**, not an engineering log.
+
+The eventual artifact is player-facing — something that could ship as a deluxe-edition
+inclusion, a backer reward, or a marketing piece. Think *concept art book*: the journey
+of the game's creation, told for someone who loves the game but will never read the
+source. Its final shape gets decided when it's written; this file is the notebook it
+gets written from.
+
+**Collect:** the human arc. What we believed going in and how it changed. Things the
+1972 hardware turned out to actually do. Ideas cut and why. Moments where the design
+argued with itself. Constraints that shaped the game's feel rather than just its code.
+Anything with a story, a reversal, or a surprise in it.
+
+**Deprioritize** (true, but not the artifact): character counts, memory addresses,
+function names, git mechanics. Where a technical detail carries the story — the machine
+having no way to produce spin, or scanlines being physically finer than a pixel we can
+draw — keep the *consequence* and let the implementation go.
+
+Not a spec and not build status: `docs/` is the source of truth, GitHub issues and
+`docs/BUILD-PLAN.md` track status.
+
+Entries are roughly chronological. Started 2026-07-27 at the M0 rework. Present
+entries lean engineering-heavy; later passes should correct toward the above.
+
+---
+
+## Recurring themes
+
+**"You can't see it run" turned out to be half true.** The project rule was that every
+behavioral claim is a hypothesis until the cart is launched by hand. That's still true
+for behavior — but partway through M0 we found `pico8.exe -x pong.p8` loads the cart
+headlessly and exits 0, surfacing syntax errors and load-time runtime errors before the
+user ever sees them. It earned its keep immediately and repeatedly: during the M7a
+cleanup it caught two runtime errors in a row (a half-deleted menu item, then two
+globals accidentally swallowed by a slice) that a parse-only check would have missed.
+It proves nothing behavioral — `_update60` and `_draw` never run — so the discipline
+of "parses and loads clean, never 'works'" stayed.
+
+**Headless PICO-8 as a calculator was the other big unlock.** Rather than reasoning
+about fixed-point arithmetic on paper, we ran the actual numbers through the actual
+interpreter. That caught things longhand would have missed:
+
+- 16.16 overflow silently *wrapping to negative* (40,551 came back as −24,986)
+- Confirming tier traverse times land at 4.32 / 2.15 / 1.43 s against a spec of
+  4.3 / 2.1 / 1.4 — proving the fixed-point representation of 0.341 doesn't drift
+- Comparing the new analytic AI prediction against a brute-force frame-by-frame
+  simulation, agreeing within 1.1 px
+- Measuring the paddle's zone distribution and finding a real bias (below)
+
+Every one of those is a claim we'd otherwise have had to hand over as "should be fine."
+
+**The spec was right more often than the code, but not always.** `docs/` won essentially
+every disagreement — except where the docs disagreed with *themselves*, which happened
+once and mattered a lot (see M6).
+
+**Small verifiable increments beat big correct ones.** The rhythm that worked: plan
+first, get a ruling on anything ambiguous, implement, run `-x`, hand over a concrete
+"verify this" block with specific failure modes, then commit only after a human had
+actually looked. Several milestones would have shipped subtle bugs without that.
+
+---
+
+## M0 — Cart upgrade and 60 fps migration
+
+The plan said "switch `_update` to `_update60` and delete the `dt` machinery." That
+part was mechanical. What wasn't in the plan were three consequences that fell out of
+the frame-rate change:
+
+1. **AI reaction times were in seconds.** The table held 0.2–1.8 compared against an
+   accumulator fed by `dt`. With `dt` gone the comparison was meaningless; the values
+   had to become frame counts (12–108).
+2. **The AI prediction ray collapsed.** It was `ball.dx * 2` — meaning "two seconds of
+   travel" when `dx` was px/sec. Per-frame, that became a 0.6 px ray that could never
+   reach the prediction wall, and COM would have stopped moving entirely.
+3. **Everything counted in frames silently doubled in speed** — paddles, dialogue
+   timings, blink rates.
+
+Lesson: a frame-rate migration isn't a frame-rate migration. It's an audit of every
+number in the codebase for what unit it's secretly in.
+
+Also of note: the build plan told us not to remove the player paddle's acceleration.
+There wasn't any — the paddle moved at a flat speed. Raised rather than "fixed," and it
+turned out to be an M8 item.
+
+## M1 — Playfield geometry and the terminal band
+
+The score placement bug is the fun one. Scores overlapped the net at double digits, and
+the cause was that `\^p` is PICO-8's *pinball* mode — wide + tall + stripey — so each
+glyph is **8 px wide, not 4**. The placement math had assumed 4.
+
+Rather than eyeball a new position, `docs/reference-materials.md` turned out to record
+the original hardware's exact score placement (left score at H 128–191, right at
+H 320–383, symmetric about the net at H 256). Converting at 0.3413 px per clock put the
+score fields 22–44 px either side of the net — a derived answer instead of a guessed one.
+
+That also forced a small design call: `print()` is left-aligned, so with both scores
+left-aligned a single-digit left score drifts further from the net than its counterpart.
+Right-aligning the left score onto its inner edge keeps the pair symmetric at any digit
+count, which is what the original did with fixed digit fields.
+
+## M2 — Fixed-point ball and the three-tier speed model
+
+Mostly smooth. The notable part was verifying the traverse times by simulation before
+handing over, and being explicit that "paddle to paddle is 88 px, not the 128 px screen"
+— timing wall-to-wall gives ~6.3 s at tier 1 and looks like a failure on correct code.
+Writing the *wrong* measurement into the verify block was as important as the right one.
+
+## M3 — The 8-zone return table
+
+Deleted `apply_spin()`. The original paddle is an analog potentiometer with no velocity
+signal anywhere in the circuit, so direction of travel at contact cannot affect the
+return — spin was never in the machine.
+
+A blocker was flagged going in: zone selection needs the ball's *center* against the
+paddle's top edge, but `ball.y` was a top-left corner. It dissolved on inspection —
+zone selection works entirely in collision space, where the model is self-consistent
+(collision expands walls by the ball radius and treats `ball.y` as a center). The
+draw/collide mismatch was real but purely visual, so it stayed deferred to M5 rather
+than blocking M3.
+
+Verified by simulation that the flat band is exactly 1.5 px of a 6 px face — the
+"quarter of the paddle" the spec calls for — and that the vertical velocity table
+reproduces the spec's separate angle table to rounding. Two tables that were asserted
+independently in the docs turned out to be consistent, which is worth knowing.
+
+## Comment strip (chore)
+
+A budget question with a crisp answer. The manual's *Code Limits* section excludes
+comments from the **token** count but they count in full against the **65,535
+character** limit — which is the binding constraint, shared with every line of dialogue
+COM speaks.
+
+Measured: **5,871 characters, 17% of the code and 9% of the entire budget.** Stripped,
+and the cart has carried no comments since; rationale lives in `docs/`, `CLAUDE.md` and
+commit messages instead. The `-->8` tab separators look like comments and are not —
+they're structural.
+
+## M4 — Serve rules
+
+The interesting mechanic: the ball keeps travelling and bouncing **invisibly** through
+the ~1.7 s serve delay, so its height on reappearance is effectively arbitrary. That's
+why the original's serve feels random, and it's reproduced deliberately.
+
+Simulation across every vertical velocity and a spread of miss heights confirmed the
+reappearance lands anywhere in 1.4–93.6 against bounds of 0–94. It also surfaced an
+edge case worth documenting rather than "fixing": **if the point ends on a dead-flat
+return (`dy = 0`), the ball reappears at exactly the height it left.** A flat ball
+travelling flat for 1.7 s arrives where it started. Correct, and the one case where a
+correct serve looks deterministic.
+
+Also nice: "the ball is served toward whoever missed it" and "horizontal direction is
+unchanged by a miss" are the same rule, which is easy to read as two. Preserving the
+sign of `dx` gives it for free — no branch on who scored.
+
+## M5 — Collision rework and the ball collection
+
+The convention cleanup found a real bug. Under the old inclusive draw
+(`rectfill(x, y, x+width, y+height)` paints `width+1` columns), the paddle's collidable
+face was **5 units against a 6 px sprite**. The radius expansion therefore gave it an
+overhang above its top edge and none below.
+
+Measured across the contact span: zone 1 covered 1.80 units of contact range against
+zone 8's 0.75. **The top rim returned steep-up 2.4× more often than the bottom rim
+returned steep-down** — an asymmetry nobody would have found by playing, and which had
+been silently shaping every rally since M3. Making logical size equal drawn size fixed
+it; both rims now cover 1.75.
+
+Verifying the *distribution* rather than just "does it return the right angle" is what
+caught it.
+
+## M6 — AI rework
+
+**The docs contradicted themselves, and it mattered.** Game Design said COM
+"weakens while losing and sharpens while winning, quietly keeping the match close."
+Those two halves are incompatible — an AI that sharpens when ahead runs away with the
+game. The sentence resolves only if "losing/winning" refers to the *player*.
+
+Raised rather than resolved in code, per the project rule that Game Design is upstream.
+The ruling came back as rubber-band (COM weakens as it pulls ahead), which is what the
+cart had always done. Then grep found **two more places stating the opposite**, one of
+which *reasoned from it* — Bargaining's note justified excluding the head start from
+the balance calculation because spotting COM 10 points "would hand him maximum
+sharpness." Under rubber-band it does the reverse. Four locations reworded; the rule
+survived, its stated mechanism inverted.
+
+Lesson: when a doc is ambiguous, grep for every restatement before acting on one
+ruling. The majority of the prose was on the *other* side of the ambiguity.
+
+Technically, this was the milestone where deferred debt paid off all at once. Replacing
+segment-intersection prediction with closed-form
+(`frames = (face - x) / dx`, `y = ball.y + dy * frames`) removed the prediction wall
+entirely, which removed the only reason `intercept()` needed its ±140/−50 coordinate
+clamps, which removed 8 comparisons per call from what will become the swarm's inner
+loop. **First milestone to shrink the cart: 28,522 → 26,192 characters.**
+
+It also fixed a behavior nobody had reported: the old ray was 120 frames of *travel*,
+so it shrank with the ball — 41 px at tier 1 — leaving COM idle until the ball crossed
+the net.
+
+## M7a — Palettes and scanlines
+
+The one milestone with no verification path. Headless PICO-8 doesn't render, and
+`extcmd("screenshot")` writes nothing under `-x`, so the display behavior of the
+undocumented scanline registers (`0x5f5f`, `0x5f70`–`0x5f7f`) could only be checked by a
+human looking at a screen. Confirmed they're absent from the 0.2.7 manual, which the
+project notes had already warned about.
+
+**A structural consequence of display-palette recoloring:** it remaps stored pixel
+values, so every element needs its own draw index. Paddles, net and ball were all
+color 6 — indistinguishable to a remap, but Anger needs orange paddles against a white
+ball. Everything moved onto role indices (bg / paddle / ball / score) with the per-act
+table mapping roles to real colors.
+
+**The scanline reality check.** The original playfield is 246 scanlines mapped onto our
+96 rows — one Meta Pong pixel is ~2.56 original scanlines, so *a real scanline pair is
+finer than a single pixel we can draw*. Any scanline we render is ~2.5× too coarse.
+Scanlines here are necessarily stylization, not reproduction. Parked as a possible
+player-facing option rather than pretending otherwise.
+
+**The pullback.** The first version had full-screen alternating-line darkening at 50%
+coverage, animated, on in every act. Feedback: eye strain, and plausibly a
+photosensitivity trigger. That's a real accessibility problem and it should have been
+weighed before shipping it as always-on.
+
+The fix came from a better lever than the one we'd been using. The per-line hardware
+darkens whole screen rows, so it *cannot* scope an effect to an element — the score sits
+at rows 8–19, which the net also crosses. But the scanline palette only affects colors
+whose darkened entry differs from their base. Setting `dark(bg) = bg`,
+`dark(paddle) = paddle`, `dark(ball) = ball` and dimming *only* the score entry makes
+scanlines physically incapable of touching the game area, whatever rows are enabled.
+Since dialogue text already drew in the score role, one change scoped every effect to
+exactly the two elements that should have them.
+
+Final: 1/8 scan on score and dialogue text only, a slow crawl, and an infrequent
+half-second tear. Game area is plain solid color.
+
+**Two smaller finds.** A palette-contrast rule fell out of a bug where Bargaining's
+score blinked out: it darkened `11 → 3` against a background that *is* `3`, so on dark
+lines the score became the background exactly. The darkened palette has to preserve
+*contrast*, not merely reduce luminance — and PICO-8 only has two greens, so some
+colors can't darken at all.
+
+And the score digits were dotted because `\^p` (pinball) includes stripey mode.
+`\^w\^t` gives the same 8×12 dimensions solid — matching the machine's solid block
+numbers.
+
+**A tooling note:** a pause-menu tuning harness via `menuitem()` — live toggles for
+density, crawl, tear, glow and act — was the single most productive thing built this
+milestone. For anything only a human eye can judge, shipping the *options* and letting
+the user compare beat any amount of describing them in prose. Glow and net drift were
+both cut after a minute of looking at them; neither would have been settled by argument.
+
+---
+
+## Running notes for the post-mortem
+
+- Engine footprint over time: 32,653 (pre-M0) → 33,822 (M2 peak) → 27,951 (post comment
+  strip) → 26,192 (M6, smallest) → 28,273 (M7a). Ceiling is 65,535, shared with dialogue.
+- The five things simulation caught that review wouldn't have: fixed-point overflow
+  wrapping, tier traverse timing, zone distribution bias, analytic-vs-simulated
+  prediction agreement, serve-height spread.
+- The one thing simulation *couldn't* touch: anything visual. M7a needed a human every
+  single round.
+- Deferred debt that paid off: `ball.y` conventions and the `intercept()` clamps were
+  both carried for three milestones with a written reason, then removed in one pass when
+  the milestone that owned them arrived. Writing down *why* something was deferred, with
+  measurements, made the eventual removal a five-minute decision.
