@@ -18,6 +18,99 @@ SERVE_X = 66
 PADDLE_MIN_Y = 6
 PADDLE_MAX_Y = 84
 
+C_BG = 0
+C_PADDLE = 1
+C_BALL = 2
+C_SCORE = 3
+
+DEBUG_ACT = nil
+
+SCORE_Y = 8
+SCORE_H = 12
+
+ACT_PALETTES = {
+ {0,7,7,7,   6},
+ {8,9,7,10,  9},
+ {3,10,7,11, 1},
+ {1,5,7,12,  13},
+ {5,6,7,9,   4}
+}
+
+
+
+SCAN_PATTERN = {0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01}
+
+CRAWL_RATE = 12
+crt = {phase=0, st=0, ty=-1, tw=240}
+
+function set_palette(n)
+    local a = ACT_PALETTES[mid(1,DEBUG_ACT or n,#ACT_PALETTES)]
+    poke(0x5f10, a[1],a[2],a[3],a[4], 4,5,6,7,8,9,10,11,12,13,14,15)
+    poke(0x5f60, a[1],a[2],a[3],a[5], 4,5,6,7,8,9,10,11,12,13,14,15)
+end
+
+function set_scanlines()
+    local p = SCAN_PATTERN[(crt.phase % 8) + 1]
+    memset(0x5f70, 0, 12)
+    for y=SCORE_Y,SCORE_Y+SCORE_H-1 do
+        local i = 0x5f70 + flr(y/8)
+        poke(i, peek(i) | (p & (1 << (y%8))))
+    end
+    memset(0x5f7c, p, 4)
+end
+
+function init_crt()
+    poke(0x5f5f, 0x10)
+    set_scanlines()
+end
+
+function init_menu()
+    menuitem(1,"act "..(DEBUG_ACT or "auto"),function()
+        DEBUG_ACT = (DEBUG_ACT or 0) + 1
+        if (DEBUG_ACT > #ACT_PALETTES) DEBUG_ACT = nil
+        set_palette(gm.level_index)
+        init_menu()
+        return true
+    end)
+end
+
+TEAR_H = 6
+
+function scan_row(y)
+    return (y >= SCORE_Y and y < SCORE_Y+SCORE_H) or y > PLAYFIELD_BOTTOM
+end
+
+function update_crt()
+    crt.st += 1
+    if crt.st >= CRAWL_RATE then
+        crt.st = 0
+        crt.phase += 1
+        set_scanlines()
+    end
+    if crt.ty < 0 then
+        crt.tw -= 1
+        if (crt.tw <= 0) crt.ty = 127
+    else
+        crt.ty -= 4
+        if crt.ty < 0 then
+            crt.ty = -1
+            crt.tw = 420 + rnd(600)
+        end
+    end
+end
+
+function apply_tear()
+    if (crt.ty < 0) return
+    for i=0,TEAR_H-1 do
+        local y = crt.ty + i
+        if y < 128 and scan_row(y) then
+            local a = 0x6000 + (y*64)
+            memcpy(0x8000, a, 63)
+            memcpy(a+1, 0x8000, 63)
+        end
+    end
+end
+
 function coin_flip()
     if rnd(2) > 1 then
         return 1
@@ -136,24 +229,24 @@ function game_manager:draw()
 
 	local states = {
 		[game_manager.states.title] = function()
-			print("title",44,60)
+			print("title",44,60,C_SCORE)
         end,
 		[game_manager.states.menu] = function()
-			print("press ❎ to start",32,64,7)
+			print("press ❎ to start",32,64,C_SCORE)
         end,
 		[game_manager.states.options] = function()
-			print("options",44,60)
+			print("options",44,60,C_SCORE)
         end,
         [game_manager.states.level] = function()
             self.level:draw()
         end,
 		[game_manager.states.gameover] = function()
-			print("game over",45,60)
+			print("game over",45,60,C_SCORE)
             self.level.textbox:draw()
 		end,
 		[game_manager.states.intermission] = function()
             pong.draw_balls()
-            print("press ❎ to continue",32,64,7)
+            print("press ❎ to continue",32,64,C_SCORE)
 		end
 	}
 	
@@ -181,7 +274,8 @@ end
 function level:load()
 	self.textbox.sectiontitle=self.dialogue.title
 	self.textbox.sectionphrase=self.dialogue.phrase.text
-	self.textbox.rect.color=self.dialogue.color
+	self.textbox.rect.color=C_BG
+    set_palette(gm.level_index)
     self.dialogue:init()
 
     player1.visible = true
@@ -248,9 +342,11 @@ function _init()
 	gm = game_manager:new()
     gm.screenwidth = 128
     gm.screenheight = 128
-	tb = textbox:new(0,96,127,31,12)
+    init_crt()
+	tb = textbox:new(0,96,127,31,C_BG)
     p = pong:new()
     p:reset_game()
+    init_menu()
 	gm:add_level(level:new(dialogues[1],tb,p))
 	gm:add_level(level:new(dialogues[2],tb,p))
 	gm:add_level(level:new(dialogues[3],tb,p))
@@ -260,6 +356,7 @@ end
 
 function _update60()
 	gm:update()
+    update_crt()
 end
 
 function update_input()
@@ -278,15 +375,15 @@ function _draw()
 	cls(0)
 
     gm:draw()
-
+    apply_tear()
 end
 
 function draw_score()
 
 
 
-    print("\^p" .. hud.p1_score,hud.p1_x-(#tostr(hud.p1_score)*8),hud.p1_y,hud.p1_color)
-    print("\^p" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
+    print("\^w\^t" .. hud.p1_score,hud.p1_x-(#tostr(hud.p1_score)*8),hud.p1_y,hud.p1_color)
+    print("\^w\^t" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
 end
 
 function draw_debug()
@@ -331,6 +428,7 @@ function pong:reset_game()
     self:init_players()
     self:init_balls()
 
+    set_palette(1)
     gm:change_state(game_manager.states.menu)
 end
 
@@ -354,7 +452,7 @@ function pong:init_net()
         block_space = 3,
         x = 64,
         y = 0,
-        color = 6,
+        color = C_PADDLE,
         drawnet = function()
             ypos = net.y
             while (ypos + net.block_height <= PLAYFIELD_BOTTOM) do
@@ -370,11 +468,11 @@ function pong:init_hud()
         p1_score = 0,
         p1_x = 42,
         p1_y = 8,
-        p1_color = 7,
+        p1_color = C_SCORE,
         p2_score = 0,
         p2_x = 87,
         p2_y = 8,
-        p2_color = 7,
+        p2_color = C_SCORE,
     }
 end
 
@@ -406,7 +504,7 @@ function pong:add_ball()
     local rad = 1
     local b = {
         radius = rad,
-        color = 6,
+        color = C_BALL,
         x = SERVE_X,
         y = rad + rnd(PLAYFIELD_BOTTOM - rad - rad),
         hits = 0,
@@ -446,7 +544,7 @@ function pong:create_wall(xpos,ypos,w,h)
         height = h,
         x = xpos,
         y = ypos,
-        color = 6,
+        color = C_PADDLE,
         visible = true,
         collsion = true,
         collsionpt = nil,
@@ -857,7 +955,7 @@ function textbox:draw()
                 blinkert = 0
                 if blinkerc == 16 then blinkerc = 32 else blinkerc = 16 end
             end
-			print(chr(62)..' '..self.sectionphrase..' '..chr(blinkerc),rect.x0+2,rect.y0+2,7)
+			print(chr(62)..' '..self.sectionphrase..' '..chr(blinkerc),rect.x0+2,rect.y0+2,C_SCORE)
 		end
 	end
 end
@@ -998,19 +1096,19 @@ add(dialogue_denial.sections,section)
 local section2 = dialogue.create_section()
 add(dialogue_denial.sections,section2)
     add(section2.phrases,dialogue.create_phrase('where is the second player?',7,360))
-    add(section2.phrases,dialogue.create_phrase('are they in the bathroom?',7,480))
-    add(section2.phrases,dialogue.create_phrase('maybe you should wait for them',7,100))
-    add(section2.phrases,dialogue.create_phrase('its their quarter too',7,200))
+    --add(section2.phrases,dialogue.create_phrase('are they in the bathroom?',7,480))
+    --add(section2.phrases,dialogue.create_phrase('maybe you should wait for them',7,100))
+    --add(section2.phrases,dialogue.create_phrase('its their quarter too',7,200))
 local section3 = dialogue.create_section()
 add(dialogue_denial.sections,section3)
-    add(section3.phrases,dialogue.create_phrase('you know pong is a 2-player game right?',7,360))
+    --add(section3.phrases,dialogue.create_phrase('you know pong is a 2-player game right?',7,360))
     add(section3.phrases,dialogue.create_phrase('dont have any friends?',7,240))
-    add(section3.phrases,dialogue.create_phrase('sorry what i mean is',7,120))
-    add(section3.phrases,dialogue.create_phrase('do you want some help?',7,200))
+    --add(section3.phrases,dialogue.create_phrase('sorry what i mean is',7,120))
+    --add(section3.phrases,dialogue.create_phrase('do you want some help?',7,200))
 local section4 = dialogue.create_section()
 add(dialogue_denial.sections,section4)
-    add(section4.phrases,dialogue.create_phrase('never got to play before',7,360))
-    add(section4.phrases,dialogue.create_phrase('i bet i am really good',7,180))
+    -- add(section4.phrases,dialogue.create_phrase('never got to play before',7,360))
+    -- add(section4.phrases,dialogue.create_phrase('i bet i am really good',7,180))
     add(section4.phrases,dialogue.create_phrase('brb, gonna jump in real quick',7,360))
 local section5 = dialogue.create_section()
     add(dialogue_denial.sections,section5)
