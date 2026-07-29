@@ -342,6 +342,29 @@ same act with fresh dialogue.
 
 ---
 
+## Documentation freeze (Alpha)
+
+**`docs/tech-design.md`, `docs/game-design.md`, `docs/reference-materials.md` and the
+GitHub wiki are frozen for the remainder of Alpha.** Do not edit them, and do not sync
+the wiki. Only `DEVLOG.md` and this file may be updated as work proceeds.
+
+A single documentation pass happens at the end of Alpha and incorporates everything
+below. The correct order at that point is **wiki first, then re-sync the mirrors down** —
+`docs/*.md` carry a "MIRROR OF THE GITHUB WIKI / do not edit here" header, and editing
+the mirror leaves changes that the next sync silently reverts.
+
+As of the freeze, repo mirrors and wiki are consistent through M7b (wiki `2e419bc`), so
+this backlog starts empty. **Append to it whenever a milestone settles something the
+design docs don't yet reflect** — otherwise the end-of-Alpha pass has to reconstruct it
+from commit messages.
+
+| Milestone | Needs writing up |
+|---|---|
+| M7b | `phosphor_mode` `full` vs `ball` — decision deferred until M10 gives dialogue a letter-by-letter reveal, since full-frame blending's effect on animated text cannot be judged before then. Both modes ship meanwhile |
+| M7a/M7b | The pause-menu act selector and `DEBUG_ACT` are dev scaffolding currently living in the cart. Decide whether they ship (the CRT options were cut; the act selector may be worth keeping) or get stripped |
+
+---
+
 ## Open items flagged but not decided
 
 - **Depression contrast — already resolved, noted so it doesn't get reopened.** An
