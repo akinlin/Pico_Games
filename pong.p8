@@ -3,10 +3,6 @@ version 43
 __lua__
 
    
-SCORE_TO_WIN = 11
-
-PADDLE_SPEED = 2
-
 PLAYFIELD_BOTTOM = 95
 
 BALL_SPEEDS = {0.341, 0.683, 1.024}
@@ -15,8 +11,6 @@ BALL_VZONES = {-1.171,-0.780,-0.390,0,0,0.390,0.780,1.171}
 BALL_ZONE_SIZE = 0.75
 SERVE_DELAY = 102
 SERVE_X = 66
-PADDLE_MIN_Y = 6
-PADDLE_MAX_Y = 84
 
 C_BG = 0
 C_PADDLE = 1
@@ -38,7 +32,14 @@ ACT_PALETTES = {
  {5,6,7,9,    6,5,    4}
 }
 
-ACT_PHOSPHOR = {1,0,1,1,1}
+ACT_CONFIGS = {
+ {palette=1, phosphor_mode=1},
+ {palette=2, phosphor_mode=0},
+ {palette=3, phosphor_mode=1},
+ {palette=4, phosphor_mode=1},
+ {palette=5, phosphor_mode=1},
+ {palette=1, phosphor_mode=0, ball_count=40, speed_tier_pin=3, ai_enabled=true}
+}
 
 
 
@@ -73,22 +74,30 @@ PHOS_NAMES = {"off","ball","full"}
 function init_menu()
     menuitem(1,"act "..(DEBUG_ACT or "auto"),function()
         DEBUG_ACT = (DEBUG_ACT or 0) + 1
-        if (DEBUG_ACT > #ACT_PALETTES) DEBUG_ACT = nil
-        set_palette(gm.level_index)
+        if (DEBUG_ACT > #ACT_CONFIGS) DEBUG_ACT = nil
+        p:configure(ACT_CONFIGS[mid(1,DEBUG_ACT or gm.level_index,#ACT_CONFIGS)])
+        p:start_match()
         init_menu()
         return true
     end)
-    menuitem(2,"phosphor "..PHOS_NAMES[crt.phos+1],function()
+    menuitem(2,"accel "..p.cfg.paddle_accel[2],function(b)
+        local v = p.cfg.paddle_accel[2] + (b&1>0 and -0.02 or 0.02)
+        p.cfg.paddle_accel[2] = mid(0.02,v,0.5)
+        init_menu()
+        return true
+    end)
+    menuitem(3,"pmax "..p.cfg.paddle_max_speed[2],function(b)
+        local v = p.cfg.paddle_max_speed[2] + (b&1>0 and -0.25 or 0.25)
+        p.cfg.paddle_max_speed[2] = mid(0.5,v,6)
+        init_menu()
+        return true
+    end)
+    menuitem(4,"phosphor "..PHOS_NAMES[crt.phos+1],function()
         crt.phos = (crt.phos + 1) % 3
         init_menu()
         return true
     end)
-    menuitem(3,"trail "..crt.tlen,function()
-        crt.tlen = (crt.tlen % 2) + 1
-        init_menu()
-        return true
-    end)
-    menuitem(4,"cpu "..(crt.cpu and "on" or "off"),function()
+    menuitem(5,"cpu "..(crt.cpu and "on" or "off"),function()
         crt.cpu = not crt.cpu
         init_menu()
         return true
@@ -296,8 +305,8 @@ function level:load()
 	self.textbox.sectiontitle=self.dialogue.title
 	self.textbox.sectionphrase=self.dialogue.phrase.text
 	self.textbox.rect.color=C_BG
-    set_palette(gm.level_index)
-    crt.phos = ACT_PHOSPHOR[mid(1,DEBUG_ACT or gm.level_index,#ACT_PHOSPHOR)]
+    self.pong:configure(ACT_CONFIGS[mid(1,DEBUG_ACT or gm.level_index,#ACT_CONFIGS)])
+    self.pong:start_match()
     self.dialogue:init()
 
     player1.visible = true
@@ -442,27 +451,64 @@ AI_LEVELS = {
 }
 AI_TIE_TIER = 9
 
-pong = {
-    ai_enabled=false,
-    ai_mode='self_balancing',
-    ai_tier=AI_TIE_TIER,
-    com_handicap=0
+DEFAULT_CFG = {
+ paddle_height={6,6},
+ paddle_accel={0.08,0.4},
+ paddle_max_speed={2.5,4.5},
+ ball_count=1,
+ ball_mode="replica",
+ ball_mode_pool=nil,
+ speed_tier_pin=0,
+ win_score={11,11},
+ sudden_death=false,
+ scoring_model="rally",
+ score_multiplier_com=1,
+ initial_score_com=0,
+ scoring_enabled=true,
+ com_serves_every_point=false,
+ ai_enabled=false,
+ ai_mode="self_balancing",
+ ai_tier=AI_TIE_TIER,
+ palette=1,
+ phosphor_mode=1,
+ nickname=nil
 }
+
+pong = {}
 pong.__index = pong
 function pong:new()
 	local p = {}
     setmetatable(p,pong)
+    p:configure()
 	return p
 end
 
+function pong:configure(cfg)
+    local c = {}
+    for k,v in pairs(DEFAULT_CFG) do c[k] = v end
+    if cfg then
+        for k,v in pairs(cfg) do c[k] = v end
+    end
+    self.cfg = c
+    self.com_handicap = c.initial_score_com
+    self.winner = 0
+end
+
 function pong:reset_game()
+    self:start_match()
+    gm:change_state(game_manager.states.menu)
+end
+
+function pong:start_match()
+    self.winner = 0
+    self.pending = nil
     self:init_board()
     self:init_hud()
     self:init_players()
-    self:init_balls()
+    self:init_balls(self.cfg.ball_count)
 
-    set_palette(1)
-    gm:change_state(game_manager.states.menu)
+    crt.phos = self.cfg.phosphor_mode
+    set_palette(self.cfg.palette)
 end
 
 function pong:init_board()
@@ -498,7 +544,7 @@ end
 
 function pong:init_hud()
     hud = {
-        p1_score = 0,
+        p1_score = self.cfg.initial_score_com,
         p1_x = 42,
         p1_y = 8,
         p1_color = C_SCORE,
@@ -510,20 +556,35 @@ function pong:init_hud()
 end
 
 function pong:init_players()
-    local paddle_width = 1
-    local paddle_height = 6
-    local paddle_starting_y = ((PLAYFIELD_BOTTOM+1)/2)-(paddle_height/2)
-    player1 = self:create_wall(20,paddle_starting_y,paddle_width,paddle_height)
-    player1.dir = 1
+    player1 = self:make_paddle(20,1)
     player1.prediction = nil
     player1.collisiontextboxcolor = 14
-    player1.visible = false
-    add(walls, player1)
+    player2 = self:make_paddle(108,2)
+end
 
-    player2 = self:create_wall(108,paddle_starting_y,paddle_width,paddle_height)
-    player2.dir = 1
-    player2.visible = false
-    add(walls, player2)
+function pong:make_paddle(x,side)
+    local h = self.cfg.paddle_height[side]
+    local p = self:create_wall(x,((PLAYFIELD_BOTTOM+1)/2)-(h/2),1,h)
+    p.dir = 0
+    p.v = 0
+    p.side = side
+    p.miny = h
+    p.maxy = (PLAYFIELD_BOTTOM+1) - h - h
+    p.visible = false
+    add(walls, p)
+    return p
+end
+
+function pong:move_paddle(p,d)
+    if d == 0 then
+        p.v = 0
+    else
+        if (p.dir != d) p.v = 0
+        p.dir = d
+        p.v = min(p.v + self.cfg.paddle_accel[p.side], self.cfg.paddle_max_speed[p.side])
+        p.y += p.v * d
+    end
+    p.y = mid(p.miny, p.y, p.maxy)
 end
 
 function pong:init_balls(n)
@@ -542,6 +603,7 @@ function pong:add_ball()
         y = rad + rnd(PLAYFIELD_BOTTOM - rad - rad),
         hits = 0,
         serving = 0,
+        mode = self.cfg.ball_mode,
         tc = 0,
         t1x = SERVE_X,
         t1y = 0,
@@ -557,8 +619,8 @@ function pong:add_ball()
 end
 
 function pong:ai_level()
-    if (self.ai_mode == 'fixed') then
-        return mid(1, self.ai_tier, #AI_LEVELS)
+    if (self.cfg.ai_mode == "fixed") then
+        return mid(1, self.cfg.ai_tier, #AI_LEVELS)
     end
     local diff = (hud.p1_score - self.com_handicap) - hud.p2_score
     return mid(1, AI_TIE_TIER + diff, #AI_LEVELS)
@@ -599,38 +661,59 @@ function pong:create_wall(xpos,ypos,w,h)
 end
 
 function pong:update_game_state()
-    pong.handle_game_input()
+    self:handle_game_input()
 
     for i=1,#balls do
         local b = balls[i]
         if (b.serving > 0) then
-            pong.update_serve(b)
+            self:update_serve(b)
         elseif (b.x > -b.radius) and (b.x < gm.screenwidth + b.radius) and
             (b.y < PLAYFIELD_BOTTOM+b.radius) and (b.y > -b.radius) then
-            pong.update_ball(b)
+            self:update_ball(b)
         else
-            pong.score_point(b)
+            self:score_point(b, b.dx > 0 and 1 or 2)
+        end
+        if self.pending == b then
+            self.pending = nil
+            self:score_point(b, 2)
         end
     end
 
-    if self.ai_enabled then self:run_ai(balls[1]) end
+    if self.cfg.ai_enabled then self:run_ai(balls[1]) end
 end
 
-function pong.score_point(b)
-    if (b.dx > 0) then
-        hud.p1_score += 1
-    else
-        hud.p2_score += 1
+function pong:score_point(b,who)
+    local c = self.cfg
+    if c.scoring_enabled then
+        if who == 1 then
+            hud.p1_score += c.score_multiplier_com
+        else
+            hud.p2_score += 1
+        end
+        self:check_win()
     end
-    pong.begin_serve(b)
+    self:begin_serve(b)
 end
 
-function pong.begin_serve(b)
+function pong:check_win()
+    local c = self.cfg
+    if (self.winner > 0) return
+    if c.sudden_death then
+        if (hud.p1_score > hud.p2_score) self.winner = 1
+        if (hud.p2_score > hud.p1_score) self.winner = 2
+    else
+        if (hud.p1_score >= c.win_score[1]) self.winner = 1
+        if (hud.p2_score >= c.win_score[2]) self.winner = 2
+    end
+end
+
+function pong:begin_serve(b)
     b.serving = SERVE_DELAY
     b.hits = 0
+    if (self.cfg.com_serves_every_point) b.dx = -abs(b.dx)
 end
 
-function pong.update_serve(b)
+function pong:update_serve(b)
     local r = b.radius
     local miny,maxy = r, PLAYFIELD_BOTTOM - r + 1
     b.y += b.dy
@@ -644,6 +727,8 @@ function pong.update_serve(b)
 
     b.serving -= 1
     if (b.serving <= 0) then
+        local pool = self.cfg.ball_mode_pool
+        b.mode = pool and pool[flr(rnd(#pool))+1] or self.cfg.ball_mode
         b.x = SERVE_X
         if (b.dx < 0) then
             b.dx = -BALL_SPEEDS[1]
@@ -653,29 +738,15 @@ function pong.update_serve(b)
     end
 end
 
-function pong.handle_game_input()
-    local inputdx = 0
-    if (btn(⬇️)) then
-        if (player2.y < PADDLE_MAX_Y) then
-            player2.dir = 1
-            inputdx = PADDLE_SPEED
-        else
-            player2.y = PADDLE_MAX_Y
-        end
-    end
-
-    if (btn(⬆️)) then
-        if (player2.y > PADDLE_MIN_Y) then
-            player2.dir = -1
-            inputdx = PADDLE_SPEED
-        else
-            player2.y = PADDLE_MIN_Y
-        end
-    end
-    player2.y += (inputdx*player2.dir)
+function pong:handle_game_input()
+    local d = 0
+    if (btn(⬇️)) d = 1
+    if (btn(⬆️)) d = -1
+    self:move_paddle(player2,d)
 end
 
-function pong.speed_tier(hits)
+function pong:speed_tier(hits)
+    if (self.cfg.speed_tier_pin > 0) then return self.cfg.speed_tier_pin end
     if (hits >= BALL_HITS_MAX) then return 3 end
     if (hits >= 4) then return 2 end
     return 1
@@ -685,7 +756,11 @@ function pong.contact_zone(cy, py)
     return mid(1, flr((cy - py) / BALL_ZONE_SIZE) + 1, 8)
 end
 
-function pong.update_ball(b)
+function pong:update_ball(b)
+    if b.mode == "homing" and b.dx > 0 then
+        local t = player2.y + player2.height/2
+        b.dy = mid(-BALL_VZONES[8], b.dy + mid(-0.02,(t-b.y)*0.01,0.02), BALL_VZONES[8])
+    end
     local nx,ny = b.dx,b.dy
     local bx,by,r = b.x,b.y,b.radius
     local px,py = bx+nx, by+ny
@@ -721,9 +796,12 @@ function pong.update_ball(b)
 
     if (hitwall == player1) or (hitwall == player2) then
         if (b.hits < BALL_HITS_MAX) then b.hits += 1 end
-        local spd = BALL_SPEEDS[pong.speed_tier(b.hits)]
+        local ti = self:speed_tier(b.hits)
+        if (b.mode == "slow_fast") ti = ndx > 0 and 1 or 3
+        local spd = BALL_SPEEDS[ti]
         if (ndx < 0) then ndx = -spd else ndx = spd end
         ndy = BALL_VZONES[pong.contact_zone(pt.y, hitwall.y)]
+        if (self.cfg.scoring_model == "intercept" and hitwall == player2) self.pending = b
         player1.collsionpt = nil
         player2.collsionpt = nil
     end
@@ -800,7 +878,7 @@ end
 
 function pong:run_ai(b)
     if (b.dx >= 0) or (b.serving > 0) then
-        player1.dir = 0
+        self:move_paddle(player1,0)
         player1.prediction = nil
         return
     end
@@ -808,23 +886,16 @@ function pong:run_ai(b)
     self:predict(b)
 
     local pr = player1.prediction
+    local d = 0
     if pr then
         local c = player1.y + player1.height/2
         if (pr.y < c - 2) then
-            player1.dir = -1
+            d = -1
         elseif (pr.y > c + 2) then
-            player1.dir = 1
-        else
-            player1.dir = 0
+            d = 1
         end
     end
-    player1.y += (PADDLE_SPEED*player1.dir)
-    if (player1.y < PADDLE_MIN_Y) then
-        player1.y = PADDLE_MIN_Y
-    end
-    if (player1.y > PADDLE_MAX_Y) then
-        player1.y = PADDLE_MAX_Y
-    end
+    self:move_paddle(player1,d)
 end
 
 function pong:predict(b)
@@ -1091,7 +1162,7 @@ end
 function dialogue:changestate(s)
     local states = {
         [dialogue.states.observing] = function()
-            gm.level.pong.ai_enabled=false;
+            gm.level.pong.cfg.ai_enabled=false;
             printh('observing')
         end,
         [dialogue.states.crusing] = function()
@@ -1101,7 +1172,7 @@ function dialogue:changestate(s)
         [dialogue.states.playing] = function()
             add_timer(100,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
             self.continuesequence=false
-            gm.level.pong.ai_enabled=true;
+            gm.level.pong.cfg.ai_enabled=true;
             hud.p1_score=0
             hud.p2_score=0
             printh('playing')

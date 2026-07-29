@@ -299,6 +299,47 @@ you'd chosen and rendered everything in green-on-black — which, entirely by ac
 about the most stereotypically "old computer terminal" pairing available. Briefly
 tempting. Not what the act called for.
 
+## M8 — The paddle that couldn't reach half of itself
+
+The paddle moved two pixels at a time. That sounds like a detail about responsiveness.
+It wasn't — it was quietly dismantling the most carefully built system in the game.
+
+Every return angle in Meta Pong comes from *where* on the paddle the ball lands. The
+face is six pixels tall, divided into eight bands three-quarters of a pixel wide, and
+which band you hit decides where the ball goes. It's the whole reason the original
+machine feels like a game of skill rather than a game of luck. We'd derived those bands
+from the hardware, checked them against the original's angle tables, and confirmed they
+were evenly reachable.
+
+Except the paddle could only stop at every *other* pixel. Aiming at a specific band
+meant putting the paddle at a specific height, and half the heights didn't exist. In
+practice a player could reach about three of the eight bands.
+
+It got stranger. The paddle started on odd-numbered positions and moved in twos, so it
+stayed on odd numbers — until it hit the bottom of its travel, which sat on an even
+number and knocked it permanently onto evens. Which positions you *could* reach depended
+on where you'd been. There was no way to learn it, because it changed.
+
+The report from playtesting was that the paddle "would skip certain locations so hitting
+the ball on a certain point of the paddle couldn't be done in some cases." That is
+exactly right, and it is the kind of thing that only surfaces from someone actually
+playing. No amount of reading the code suggests it: every individual piece is correct.
+The paddle moves at a sensible speed. The bands are the right width. The bug lives
+entirely in the interaction between them.
+
+The fix is that the paddle now has a real sense of momentum — it eases up from rest
+instead of leaping, and it holds fractional positions rather than snapping to whole
+pixels. A quick tap nudges it a fraction of a pixel; holding the button lets it build to
+a sprint across the field in about three-quarters of a second. All eight bands became
+reachable, and the aiming system that had been there all along finally turned on.
+
+Two things worth remembering from this one. First, the tuning numbers came from
+playtesting inside a minute — being able to adjust the paddle's response live, while
+playing, found a good feel far faster than any amount of reasoning about acceleration
+curves. Second, the ability to change that response *situationally* felt good enough
+that it got written down as a possible feature rather than a setting. Some of the best
+ideas arrive disguised as debug tools.
+
 ---
 
 ## Running notes for the post-mortem
