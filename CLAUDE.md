@@ -323,10 +323,14 @@ Two dialogue rules that are easy to violate by accident:
   Two caveats: this shares `0x5f60`–`0x5f6f` with `fillp`'s secondary palette, so the
   two cannot both be used; and **these addresses are undocumented in the manual**, so
   re-verify against any future release.
-- **Phosphor glow** is frame-blending via a stashed previous frame in remapped video
-  memory. Costs ~24% of the frame budget, so it is a per-act config axis: on in Denial,
-  Bargaining, Depression, Acceptance; **off in Anger**, where the frame goes to the
-  swarm.
+- **Phosphor glow** is a three-state per-act axis, `phosphor_mode`: `off` / `ball` /
+  `full`. `full` blends the whole previous frame (stashed in the unused spritesheet) and
+  **measures 29%** of the frame budget; `ball` trails only the ball and measures **4%**.
+  On in Denial, Bargaining, Depression, Acceptance; **off in Anger**, where the frame
+  goes to the swarm.
+- **`pal()` with no arguments resets all three palettes** — draw, display and secondary —
+  wiping both the act palette at `0x5f10` and the scanline palette at `0x5f60`. Restore
+  individual draw entries explicitly. The symptom is an act rendering green-on-black.
 - **`btnp()` auto-repeat** timing is tuned via `0x5f5c` (delay) and `0x5f5d` (interval).
   Needed for name entry.
 - **Do not use keyboard input** (`stat(30)`/`stat(31)`). It requires devkit mode,
