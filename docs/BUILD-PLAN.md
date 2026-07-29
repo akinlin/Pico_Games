@@ -235,9 +235,21 @@ This is the milestone the whole plan is built around. Everything above becomes a
   `com_serves_every_point`, `ai_enabled`, `ai_mode`, `ai_tier`, `palette`, `nickname`,
   `phosphor_mode` (`off`/`ball`/`full`).
 - Apply on `level` load. **One engine, parameterized — never fork it.**
-- Collapse `game_manager`'s six states to `attract` and `level`.
-- Player paddle control: buttons with acceleration/momentum. Curve and max speed are
-  playtest values — start somewhere sane and expect to tune.
+- ~~Collapse `game_manager`'s six states to `attract` and `level`.~~ **Deferred to M10** —
+  the collapse touches the dialogue state machine that M10 rebuilds, so doing it here
+  means reworking the same code twice.
+- Player paddle control: buttons with acceleration/momentum, **and fractional position**.
+  Curve and max speed are playtest values — start somewhere sane and expect to tune.
+
+  **Why fractional matters more than the curve.** At a flat 2 px/frame the paddle reaches
+  only 59 of its 79 positions, and *which* 20 are missing depends on which clamp it last
+  touched — moving down from the start lands on odd positions, hitting the bottom clamp
+  (84, even) flips it to evens permanently. The reachable set is stateful, so it can't be
+  learned. Worse, 2 px quantization against 0.75 px zones means a player can reach only
+  about **3 of the 8 return zones** for a given incoming ball, which makes most of M3's
+  angle model unreachable in play. Fractional position is the fix; acceleration is what
+  makes it usable. There is also a 1-frame overshoot past `PADDLE_MAX_Y` to y=85, because
+  `handle_game_input` clamps *before* moving rather than after.
 
 **Acceptance**
 
@@ -339,6 +351,42 @@ the user fill them.
 **Acceptance, per act:** the act loads with the right palette, nickname, win condition
 and ball behavior; win advances and writes the checkpoint; loss resets and replays the
 same act with fresh dialogue.
+
+---
+
+## Documentation freeze (Alpha)
+
+**`docs/tech-design.md`, `docs/game-design.md`, `docs/reference-materials.md` and the
+GitHub wiki are frozen for the remainder of Alpha.** Do not edit them, and do not sync
+the wiki. Only `DEVLOG.md` and this file may be updated as work proceeds.
+
+A single documentation pass happens at the end of Alpha and incorporates everything
+below. The correct order at that point is **wiki first, then re-sync the mirrors down** —
+`docs/*.md` carry a "MIRROR OF THE GITHUB WIKI / do not edit here" header, and editing
+the mirror leaves changes that the next sync silently reverts.
+
+As of the freeze, repo mirrors and wiki are consistent through M7b (wiki `2e419bc`), so
+this backlog starts empty. **Append to it whenever a milestone settles something the
+design docs don't yet reflect** — otherwise the end-of-Alpha pass has to reconstruct it
+from commit messages.
+
+| Milestone | Needs writing up |
+|---|---|
+| M7b | `phosphor_mode` `full` vs `ball` — decision deferred until M10 gives dialogue a letter-by-letter reveal, since full-frame blending's effect on animated text cannot be judged before then. Both modes ship meanwhile |
+| M7a/M7b | The pause-menu act selector and `DEBUG_ACT` are dev scaffolding currently living in the cart. Decide whether they ship (the CRT options were cut; the act selector may be worth keeping) or get stripped |
+| M8 | **Parking Lot addition:** explore `paddle_accel` / `paddle_max_speed` as expressive per-situation settings rather than fixed per-act values — being able to change paddle response in different situations was noticeably good in playtest. Flagged deliberately as a *later* exploration, not scope creep into Alpha |
+| M8 | Playtest-tuned paddle values landed at `paddle_accel = 0.4`, `paddle_max_speed = 4.5` for the **player**. COM stays at 0.08 / 2.5 — the values it was actually playtested against. COM's own paddle response has never been tuned independently and probably wants its own pass, since it interacts with the `ai_levels` difficulty curve |
+| M8 | Measured **12%** of frame for 40 balls at tier 3 with phosphor off, against the ~17% budget estimate. The swarm has more headroom than the design assumed |
+| M8 | `win_score` / `sudden_death` are plumbed and set `pong.winner`, but nothing acts on it — win/lose transitions live in `game_manager`'s states, deferred to M10 |
+| M8 | `ball_mode`'s `slow_fast` and `homing` are minimal working implementations so the axis is real rather than a stub. Depression (M15) owns tuning them |
+
+---
+
+## Known bugs
+
+| Area | Issue |
+|---|---|
+| Collision | ~~The ball passes through paddle corners.~~ **Fixed in M8** (`031ac98`) — and it was two separate defects. (1) *Detected but misresolved:* a `top`/`bottom` face contact flipped `dy` only and left `dx` unchanged, so the tier block restated `dx` with the unflipped sign and the ball carried through. Paddle contacts now always reverse horizontally, which is what the hardware does — it detects coincidence with a rectangular region rather than having faces at all. (2) *Never detected:* the bottom face was **inset** by the ball radius where the top face is **expanded**, leaving a 1 px notch at each bottom corner. Predates the rework. Verified by exhaustive sweep over all 42 velocity vectors, entries from outside the paddle rect only: 0 tunnelling gaps |
 
 ---
 
