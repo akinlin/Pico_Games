@@ -11,6 +11,7 @@ BALL_VZONES = {-1.171,-0.780,-0.390,0,0,0.390,0.780,1.171}
 BALL_ZONE_SIZE = 0.75
 SERVE_DELAY = 102
 SERVE_X = 66
+RESOLVE_DELAY = 120
 CD_ID = "metapong_1972_1"
 ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
 NAME_ADDR = 0x5e04
@@ -135,6 +136,10 @@ function init_menu()
         init_menu()
         return true
     end)
+    menuitem(5,"result: win/<lose",function(b)
+        p.winner = (b&1>0) and 1 or 2
+        return true
+    end)
 end
 
 TEAR_H = 6
@@ -205,13 +210,13 @@ function update_timers()
 end
 
 game_manager = {}
-game_manager.states = {title=0,menu=1,options=2,level=3,gameover=4,intermission=5}
+game_manager.states = {attract=0,level=1}
 game_manager.events = {level_complete=10}
 game_manager.inputevents = {key_pressed=20}
 game_manager.timerevents = {timer_fired=30}
 function game_manager:new()
 	local gm = {
-		state = game_manager.states.menu,
+		state = game_manager.states.attract,
 		levels = {},
 		level_index = 1
 	}
@@ -238,8 +243,7 @@ end
 function game_manager:event(e)
 	local events = {
 		[game_manager.events.level_complete] = function()
-			self.level_index += 1
-			self:change_state(game_manager.states.intermission)
+			printh('narrative sequence complete')
         end
 	}
 	
@@ -254,13 +258,9 @@ end
 function game_manager:input(e)
 	local inputevents = {
 		[game_manager.inputevents.key_pressed] = function()
-			if self.state == game_manager.states.menu or self.state == game_manager.states.intermission then
-				if self.level_index <= #self.levels then
-					self:change_state(game_manager.states.level)
-					self.level:load()
-				else
-					self:change_state(game_manager.states.gameover)
-				end
+			if self.state == game_manager.states.attract then
+				self:change_state(game_manager.states.level)
+				self.level:load()
 			end
         end
 	}
@@ -279,42 +279,61 @@ function game_manager:update()
 
 	if self.state == game_manager.states.level then
 		self.level:update()
-    elseif self.state == game_manager.states.menu then
+        self:check_result()
+    else
         p:update_game_state()
-    elseif gm.state == game_manager.states.gameover then
-        update_gameover_state()
-        self.level.textbox:update()
-    elseif gm.state == game_manager.states.intermission then
-        self.level.pong:update_game_state()
 	end
+end
+
+function game_manager:check_result()
+    if (self.resolving) return
+    local w = self.level.pong.winner
+    if (w == 0) return
+    self.resolving = true
+    player1.visible = false
+    player2.visible = false
+    add_timer(RESOLVE_DELAY, function() gm:resolve(w) end)
+end
+
+function game_manager:resolve(w)
+    self.resolving = false
+    if w == 2 then
+        cd_save_checkpoint(self.level_index)
+        self.level_index += 1
+        if self.level_index > #self.levels then
+            self.level_index = 1
+            self:to_attract()
+        else
+            self.level:load()
+        end
+    else
+        self:to_attract()
+    end
+end
+
+function game_manager:to_attract()
+    self:change_state(game_manager.states.attract)
+    p:configure(ACT_CONFIGS[1])
+    set_palette(1)
+    crt.phos = ACT_CONFIGS[1].phosphor_mode
+    timers = {}
+    self.input_lock = true
+    p:init_balls(p.cfg.ball_count)
+    p:set_attract(true)
 end
 
 function game_manager:draw()
     pong.draw_board()
 
 	local states = {
-		[game_manager.states.title] = function()
-			print("title",44,60,C_SCORE)
-        end,
-		[game_manager.states.menu] = function()
+		[game_manager.states.attract] = function()
             pong.draw_balls()
             local n = cd_name()
             if (n) print(n,64-(#n*2),2,C_SCORE)
         end,
-		[game_manager.states.options] = function()
-			print("options",44,60,C_SCORE)
-        end,
         [game_manager.states.level] = function()
             self.level:draw()
-        end,
-		[game_manager.states.gameover] = function()
-			print("game over",45,60,C_SCORE)
-            self.level.textbox:draw()
-		end,
-		[game_manager.states.intermission] = function()
-            pong.draw_balls()
-            print("press ❎ to continue",32,64,C_SCORE)
-		end
+        end
 	}
 	
 	local state = states[self.state]
@@ -339,8 +358,10 @@ function level:new(d,tb,p)
 end
 
 function level:load()
+    self.dialogue:reset()
+    local ph = self.dialogue.phrase
 	self.textbox.sectiontitle=self.dialogue.title
-	self.textbox.sectionphrase=self.dialogue.phrase.text
+	self.textbox.sectionphrase=ph and ph.text or ""
 	self.textbox.rect.color=C_BG
     self.pong:configure(ACT_CONFIGS[mid(1,DEBUG_ACT or gm.level_index,#ACT_CONFIGS)])
     self.pong:start_match()
@@ -397,7 +418,7 @@ end
 function level:update()
 	self.textbox:update()
     self.dialogue:update()
-    self.pong:update_game_state()
+    if (not gm.resolving) self.pong:update_game_state()
 end
 
 function level:draw()
@@ -432,19 +453,16 @@ function _update60()
 end
 
 function update_input()
-    local st = gm.state
-    if (st != game_manager.states.menu and st != game_manager.states.intermission) return
+    if (gm.state != game_manager.states.attract) return
+    if gm.input_lock then
+        if (btn() == 0) gm.input_lock = false
+        return
+    end
     for i=0,5 do
         if btnp(i) then
             gm:input(game_manager.inputevents.key_pressed)
             return
         end
-    end
-end
-
-function update_gameover_state()
-    if btnp(❎) then
-        p:reset_game()
     end
 end
 
@@ -543,7 +561,7 @@ end
 function pong:reset_game()
     self:start_match()
     self:set_attract(true)
-    gm:change_state(game_manager.states.menu)
+    gm:change_state(game_manager.states.attract)
 end
 
 function pong:set_attract(on)
@@ -1062,7 +1080,8 @@ function dialogue:new(t,c,debug)
 			if k == "section" then
 				return t.sections[t.index]
 			elseif k == "phrase" then
-				return t.section.phrases[t.section.index]
+				local sec = t.sections[t.index]
+				return sec and sec.phrases[sec.index]
 			else
 				return dialogue[k]
 			end
@@ -1227,6 +1246,15 @@ function dialogues.printdialogue(d,i)
 end
 
 dialogue.states={observing=0,crusing=1,playing=2,finish=3}
+function dialogue:reset()
+    self.index = 1
+    self.complete = false
+    self.continuesequence = true
+    for sec in all(self.sections) do
+        sec.index = 1
+    end
+end
+
 function dialogue:init()
     self:changestate(dialogue.states.observing)
 end
@@ -1251,9 +1279,6 @@ function dialogue:changestate(s)
         [dialogue.states.finish] = function()
             add_timer(100,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
             self.continuesequence=false
-            gm:change_state(game_manager.states.gameover)
-            player1.visible = false
-            player2.visible = false
             printh('finish')
         end
     }

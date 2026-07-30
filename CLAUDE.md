@@ -63,6 +63,31 @@ reference the issue number. Do not push or open PRs without being asked.
 
 ---
 
+## Assets are human-created
+
+Three categories of content in this game are authored by the user, never by Claude:
+
+- **Dialogue.** Every line COM speaks. Build the machinery and leave the slots empty —
+  `docs/BUILD-PLAN.md` says the same for M12–M16. Structurally obvious placeholders
+  (`line 1`, `section 2 line 3`) are fine as a test harness; anything that reads as a
+  line of the finished game is not.
+- **Audio.** All sounds and music.
+- **Art.** Sprites, the cart label, and any authored pixel work.
+
+**The boundary is authorship, not subject matter.** Transcribing a documented
+specification is in bounds — the three hardware sounds are given as frequencies and
+durations in `docs/reference-materials.md`, the act palettes are listed in
+`docs/game-design.md`, and the playfield geometry is derived from the 1972 hardware.
+Reproducing those is transcription. *Inventing* a sound, a line, or a sprite is
+authorship, and is not.
+
+**Placeholders must be obvious and flagged.** Where a milestone needs an asset that does
+not exist yet — the typewriter cue is the current case — reuse an existing in-bounds
+asset, say so plainly in the verify block, and record it in the build plan's deferred
+table so it gets replaced rather than shipped by accident.
+
+---
+
 ## Hard constraints
 
 | Budget | Ceiling | Reality |

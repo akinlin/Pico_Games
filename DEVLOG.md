@@ -379,6 +379,34 @@ that fix was the one thing in this whole project that could be tested completely
 certainty, before anyone played it: write twice, quit, come back, look. It was still
 there.
 
+## M10a — What losing means
+
+Losing used to mean the act simply started again. Correct, and completely inert: the ball
+reappears, the score is zero, carry on. It's the response of a program, not of a
+character — and this game's whole premise is that there's someone in the circuitry.
+
+So now, when COM beats you, the machine goes quiet. The colours drain back to the black
+and white it started in, the paddles disappear, and the ball goes back to knocking around
+an empty field the way it was doing before you ever walked up. Your losing score stays on
+the screen. Nothing invites you to play. It reads as a machine sitting idle — which is
+precisely what it looked like at the start, before any of this began.
+
+Press a button and he's exactly where you left him. Same act, same stage of grief, no
+progress lost and none gained. He didn't reset. He just waited.
+
+That's a two-line change to where the code goes after a loss, and it does more character
+work than a paragraph of dialogue would.
+
+**A detail that turned out to matter.** The first version froze the game for two seconds
+after the final point so the score could be read, but left both paddles on screen. In
+playtest that reads as broken — you keep tapping the button, because a paddle you can see
+is a paddle you expect to move. The fix was to take them away. The field empties, the
+score holds for a beat, and then the machine goes to sleep. Nobody has to be told the
+match is over.
+
+Somewhere in there is a general rule about interfaces: don't show someone a control you
+have switched off.
+
 ---
 
 ## Running notes for the post-mortem
