@@ -19,6 +19,10 @@ The design lives in the GitHub wiki, mirrored into this repo:
 - `docs/tech-design.md` — how it gets built. Derived from Game Design.
 - `docs/BUILD-PLAN.md` — ordered milestones and their acceptance criteria.
 
+`handoffs/` holds self-contained briefs for work that runs in its own session:
+`acts-m12-m16.md` (the next build session), `docs-pass.md` (the end-of-Alpha
+documentation pass), `cli-design.md` (the terminal design session). Each stands alone.
+
 Rules that matter:
 
 1. Game Design is upstream of Tech Design. If an implementation detail implies a
@@ -52,6 +56,26 @@ back. Therefore:
 there instead of on the user's next launch. Do this after every edit to the cart, before
 writing the verify block. It does **not** run `_update60` or `_draw`, so it proves
 nothing behavioral: report it as "parses and loads clean," never as "works."
+
+**You can also drive it headlessly.** `-x` executes the top-level chunk, so a *copy* of
+the cart with `_init()` and a loop of `_update60()` calls appended will simulate real
+frames. `btn`/`btnp` can be reassigned to inject input, and `printh()` reports state. This
+tests **behavior** — state transitions, multi-frame sequences, input handling — not just
+parsing. It found M11's freeze in seconds after reading the code had failed to:
+
+```lua
+function press(b) local o=btnp btnp=function(i) return i==b end _update60() btnp=o end
+_init()
+gm.level_index = 5
+gm:start_level()
+p.winner = 2
+for i=1,900 do _update60() end
+printh("resolving="..tostr(gm.resolving).." winner="..p.winner)
+```
+
+Work on a copy in the scratchpad, never the real cart. `_draw()` is not called, so nothing
+visual can be checked this way — how the game *feels* still needs a human, and that is
+most of what matters.
 
 **Debugging.** `printh()` writes to the host console and is the only real logging
 channel. The existing cart has a `draw_debug()` for collision-point visualization —

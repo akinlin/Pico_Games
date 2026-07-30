@@ -43,6 +43,43 @@ function cd_save_name(a,b,c)
     poke(NAME_ADDR, a, b, c)
 end
 
+NAME_LEN = 3
+BTNP_DELAY = 16
+BTNP_RATE = 5
+
+nament = {active=false, idx={1,1,1}, cur=1}
+
+function nament:start()
+    self.active = true
+    self.idx = {1,1,1}
+    self.cur = 1
+end
+
+function nament:update()
+    local n = #ALPHABET
+    if (btnp(2)) self.idx[self.cur] = (self.idx[self.cur] % n) + 1
+    if (btnp(3)) self.idx[self.cur] = ((self.idx[self.cur] + n - 2) % n) + 1
+    if (btnp(0)) self.cur = max(1, self.cur - 1)
+    if (btnp(1)) self.cur = min(NAME_LEN, self.cur + 1)
+    if btnp(5) then
+        cd_save_name(self.idx[1], self.idx[2], self.idx[3])
+        self.active = false
+        gm:to_attract()
+    end
+end
+
+function nament:draw()
+    local x = 64 - (NAME_LEN*8)/2
+    for k=1,NAME_LEN do
+        local c = sub(ALPHABET, self.idx[k], self.idx[k])
+        print("\^w\^t"..c, x, 40, C_SCORE)
+        if k == self.cur then
+            rectfill(x, 54, x+6, 54, C_SCORE)
+        end
+        x += 8
+    end
+end
+
 function cd_reset()
     memset(0x5e00, 0, 0x100)
 end
@@ -58,6 +95,7 @@ DEBUG_ACT = nil
 
 SCORE_Y = 8
 SCORE_H = 12
+BADGE_Y = 2
 
 ACT_PALETTES = {
  {0,7,7,7,    6,5,    6},
@@ -68,11 +106,11 @@ ACT_PALETTES = {
 }
 
 ACT_CONFIGS = {
- {palette=1, phosphor_mode=1},
- {palette=2, phosphor_mode=0},
- {palette=3, phosphor_mode=1},
- {palette=4, phosphor_mode=1},
- {palette=5, phosphor_mode=1},
+ {palette=1, phosphor_mode=2},
+ {palette=2, phosphor_mode=2},
+ {palette=3, phosphor_mode=2},
+ {palette=4, phosphor_mode=2},
+ {palette=5, phosphor_mode=2},
  {palette=1, phosphor_mode=0, ball_count=40, speed_tier_pin=3, ai_enabled=true}
 }
 
@@ -81,7 +119,7 @@ ACT_CONFIGS = {
 SCAN_PATTERN = {0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01}
 
 CRAWL_RATE = 12
-crt = {phase=0, st=0, ty=-1, tw=240, phos=1, tlen=2, cpu=false}
+crt = {phase=0, st=0, ty=999, tw=240, phos=2, tlen=2, cpu=false}
 
 function set_palette(n)
     local a = ACT_PALETTES[mid(1,DEBUG_ACT or n,#ACT_PALETTES)]
@@ -92,7 +130,7 @@ end
 function set_scanlines()
     local p = SCAN_PATTERN[(crt.phase % 8) + 1]
     memset(0x5f70, 0, 12)
-    for y=SCORE_Y,SCORE_Y+SCORE_H-1 do
+    for y=BADGE_Y,SCORE_Y+SCORE_H-1 do
         local i = 0x5f70 + flr(y/8)
         poke(i, peek(i) | (p & (1 << (y%8))))
     end
@@ -148,7 +186,7 @@ end
 TEAR_H = 6
 
 function scan_row(y)
-    return (y >= SCORE_Y and y < SCORE_Y+SCORE_H) or y > PLAYFIELD_BOTTOM
+    return (y >= BADGE_Y and y < SCORE_Y+SCORE_H) or y > PLAYFIELD_BOTTOM
 end
 
 function update_crt()
@@ -158,23 +196,23 @@ function update_crt()
         crt.phase += 1
         set_scanlines()
     end
-    if crt.ty < 0 then
+    if crt.ty > 127 then
         crt.tw -= 1
         if (crt.tw <= 0) crt.ty = 127
     else
         crt.ty -= 4
-        if crt.ty < 0 then
-            crt.ty = -1
+        if crt.ty <= -TEAR_H then
+            crt.ty = 999
             crt.tw = 420 + rnd(600)
         end
     end
 end
 
 function apply_tear()
-    if (crt.ty < 0) return
+    if (crt.ty > 127) return
     for i=0,TEAR_H-1 do
         local y = crt.ty + i
-        if y < 128 and scan_row(y) then
+        if y >= 0 and y < 128 and scan_row(y) then
             local a = 0x6000 + (y*64)
             memcpy(0x8000, a, 63)
             memcpy(a+1, 0x8000, 63)
@@ -214,8 +252,6 @@ end
 
 game_manager = {}
 game_manager.states = {attract=0,level=1}
-game_manager.events = {level_complete=10}
-game_manager.inputevents = {key_pressed=20}
 function game_manager:new()
 	local gm = {
 		state = game_manager.states.attract,
@@ -242,42 +278,21 @@ function game_manager:add_level(l)
 	add(self.levels,l)
 end
 
-function game_manager:event(e)
-	local events = {
-		[game_manager.events.level_complete] = function()
-			printh('narrative sequence complete')
-        end
-	}
-	
-	local event = events[e]
-    if event then
-        event()
-	elseif self.state == game_manager.states.level then
-		self.level:event(e)
-    end
-end
-
-function game_manager:input(e)
-	local inputevents = {
-		[game_manager.inputevents.key_pressed] = function()
-			if self.state == game_manager.states.attract then
-				self:change_state(game_manager.states.level)
-				self.level:load()
-			end
-        end
-	}
-
-	local input = inputevents[e]
-    if input then
-        input()
-    elseif self.state == game_manager.states.level then
-		self.level:event(e)
-    end
+function game_manager:start_level()
+	if self.state == game_manager.states.attract then
+		self:change_state(game_manager.states.level)
+		self.level:load()
+	end
 end
 
 function game_manager:update() 
     update_timers()
 	update_input()
+
+    if nament.active then
+        nament:update()
+        return
+    end
 
 	if self.state == game_manager.states.level then
 		self.level:update()
@@ -304,15 +319,16 @@ end
 
 function game_manager:resolve(w)
     self.resolving = false
+    p.winner = 0
     if w == 2 then
         cd_save_checkpoint(self.level_index)
         self.level_index += 1
         if self.level_index > #self.levels then
             self.level_index = 1
-            self:to_attract()
-        else
-            self.level:load()
+            nament:start()
+            return
         end
+        self.level:load()
     else
         self:to_attract()
     end
@@ -336,10 +352,17 @@ function game_manager:draw()
 		[game_manager.states.attract] = function()
             pong.draw_balls()
             local n = cd_name()
-            if (n) print(n,64-(#n*2),2,C_SCORE)
+            if n then
+                local t = "highscore:"
+                local tx = 64 - (#t*2)
+                rectfill(tx-2,BADGE_Y-1,tx+(#t*4),BADGE_Y+13,C_BG)
+                print(t,tx,BADGE_Y,C_SCORE)
+                print(n,64-(#n*2),BADGE_Y+7,C_SCORE)
+            end
         end,
         [game_manager.states.level] = function()
             self.level:draw()
+            if (nament.active) nament:draw()
         end
 	}
 	
@@ -391,6 +414,8 @@ function _init()
     gm.screenheight = 128
     cd_init()
     init_crt()
+    poke(0x5f5c, BTNP_DELAY)
+    poke(0x5f5d, BTNP_RATE)
 	tb = textbox:new(0,96,127,31,C_BG)
     p = pong:new()
     p:reset_game()
@@ -419,7 +444,7 @@ function update_input()
     end
     for i=0,5 do
         if btnp(i) then
-            gm:input(game_manager.inputevents.key_pressed)
+            gm:start_level()
             return
         end
     end
