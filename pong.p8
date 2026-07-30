@@ -216,7 +216,6 @@ game_manager = {}
 game_manager.states = {attract=0,level=1}
 game_manager.events = {level_complete=10}
 game_manager.inputevents = {key_pressed=20}
-game_manager.timerevents = {timer_fired=30}
 function game_manager:new()
 	local gm = {
 		state = game_manager.states.attract,
@@ -295,7 +294,12 @@ function game_manager:check_result()
     self.resolving = true
     player1.visible = false
     player2.visible = false
-    add_timer(RESOLVE_DELAY, function() gm:resolve(w) end)
+    local st = self.level.stage
+    if st:resolve(w) then
+        st.on_complete = function() gm:resolve(w) end
+    else
+        add_timer(RESOLVE_DELAY, function() gm:resolve(w) end)
+    end
 end
 
 function game_manager:resolve(w)
@@ -349,10 +353,9 @@ end
 
 level = {}
 level.__index = level
-level.events = {phrase_complete=40,section_complete=41,sequence_complete=42,level_complete=43,tb_open=44,tb_closed=45}
 function level:new(d,tb,p)
 	local l = {
-		dialogue=d,
+		stage=d,
 		textbox=tb,
 		pong=p
 	}
@@ -361,59 +364,11 @@ function level:new(d,tb,p)
 end
 
 function level:load()
-    self.dialogue:reset()
-    local ph = self.dialogue.phrase
-	self.textbox.sectiontitle=self.dialogue.title
-	self.textbox.sectionphrase=ph and ph.text or ""
+    self.stage:reset()
     self.pong:configure(ACT_CONFIGS[mid(1,DEBUG_ACT or gm.level_index,#ACT_CONFIGS)])
     self.pong:start_match()
-    self.dialogue:init()
 
     self.pong:set_attract(false)
-end
-
-function level:event(e)
-    local actions = {
-        [level.events.tb_open] = function()
-            self.dialogue:load_next()
-        end,
-        [level.events.tb_closed] = function()
-            if self.dialogue.continuesequence then
-                printh('continued sequence')
-                add_timer(100,function () self.textbox:open(function() gm:event(level.events.tb_open) end) end)
-            else
-                printh('stopped sequence')
-            end
-        end,
-        [level.events.sequence_complete] = function()
-            self.textbox:close(function () gm:event(game_manager.events.level_complete) end)
-        end,
-        [level.events.section_complete] = function()
-            local ph = self.dialogue.phrase
-            self.textbox.sectionphrase = ph and ph.text or ""
-            self.textbox:close(function () gm:event(level.events.tb_closed) end)
-        end,
-        [level.events.phrase_complete] = function()
-            local ph = self.dialogue.phrase
-            self.textbox.sectionphrase = ph and ph.text or ""
-        end
-    }
-
-    local action = actions[e]
-    if action then
-        action()
-    else
-        self.dialogue:event(e)
-    end
-end
-
-function level:printdebugdialogue()
-    printh('--[[dialog info')
-    printh('# sections: '..#self.dialogue.sections)
-    printh('# phrases: '..#self.dialogue.sections[self.dialogue.index].phrases)
-    printh('section: '..self.dialogue.index)
-    printh('phrase: '..self.dialogue.sections[self.dialogue.index].index)
-    printh('--]]')
 end
 
 function level:input()
@@ -421,7 +376,7 @@ end
 
 function level:update()
 	self.textbox:update()
-    self.dialogue:update()
+    self.stage:update(self.textbox)
     if (not gm.resolving) self.pong:update_game_state()
 end
 
@@ -440,11 +395,11 @@ function _init()
     p = pong:new()
     p:reset_game()
     init_menu()
-	gm:add_level(level:new(dialogues[1],tb,p))
-	gm:add_level(level:new(dialogues[2],tb,p))
-	gm:add_level(level:new(dialogues[3],tb,p))
-	gm:add_level(level:new(dialogues[4],tb,p))
-	gm:add_level(level:new(dialogues[5],tb,p))
+	gm:add_level(level:new(stages[1],tb,p))
+	gm:add_level(level:new(stages[2],tb,p))
+	gm:add_level(level:new(stages[3],tb,p))
+	gm:add_level(level:new(stages[4],tb,p))
+	gm:add_level(level:new(stages[5],tb,p))
 
     local cp = cd_checkpoint()
     if (cp >= 5) cp = 0
@@ -1065,85 +1020,6 @@ function pong.draw_balls()
     end
 end
 -->8
-dialogue = {}
-
-function dialogue:new(t,c,debug)
-	local d = {
-		state=nil,
-        complete=false,
-		sections={},
-		index=1,
-		title=t,
-		color=c,
-        continuesequence=true
-	}
-
-    if debug then
-        for x=1,flr(rnd(3))+3 do 
-            local section = dialogue.create_section()
-            add(d.sections,section)
-            for y=1,flr(rnd(4))+5 do 
-                local phrase = dialogue.create_phrase('phrase '..y,7,3)
-                add(section.phrases,phrase)
-            end
-        end
-    end
-
-	setmetatable(d, {
-		__index = function(t, k)
-			if k == "section" then
-				return t.sections[t.index]
-			elseif k == "phrase" then
-				local sec = t.sections[t.index]
-				return sec and sec.phrases[sec.index]
-			else
-				return dialogue[k]
-			end
-		end
-	})
-	return d
-end
-
-function dialogue.create_section()
-    local s = {
-		phrases = {},
-		index=1
-    }
-    return s
-end
-
-function dialogue.create_phrase(t,c,d)
-    local p = {
-        text=t,
-        color=c,
-        duration=d
-    }
-    return p
-end
-
-function dialogue:load_next()
-	if self.complete then return end
-	add_timer(self.phrase.duration, function() gm:event(game_manager.timerevents.timer_fired) end)
-end
-
-function dialogue:event(e)
-	if e == game_manager.timerevents.timer_fired then
-		self.section.index += 1
-		if self.section.index > #self.section.phrases then
-			self.index += 1
-			if self.index > #self.sections then
-				self.complete=true
-				gm:event(level.events.sequence_complete)
-			else
-				gm:event(level.events.section_complete)
-			end
-		else
-			gm:event(level.events.phrase_complete)
-			self:load_next()
-		end
-	end
-end
-
 TB_ROWS = 4
 TB_COLS = 31
 TB_REVEAL = 2
@@ -1163,9 +1039,7 @@ function textbox:new(xpos,ypos,w,h,c)
 		t=0,
 		blink=0,
 		pending=nil,
-		last=nil,
-		sectiontitle="",
-		sectionphrase=""
+		last=nil
 	}
 	setmetatable(tb,textbox)
 	return tb
@@ -1209,11 +1083,6 @@ end
 function textbox:update()
 	self.blink = (self.blink + 1) % 30
 
-	if self.sectionphrase != self.last then
-		self.last = self.sectionphrase
-		self:say(self.sectionphrase)
-	end
-
 	if self.i < #self.src then
 		self.t += 1
 		if self.t >= TB_REVEAL then
@@ -1245,6 +1114,10 @@ function textbox:draw()
 	print(c, self.x+2, y, C_SCORE)
 end
 
+function textbox:done()
+	return self.i >= #self.src and #self.queue == 0
+end
+
 function textbox:open(cb)
 	self.pending = cb
 end
@@ -1255,130 +1128,198 @@ end
 
 -->8
 -->8
-dialogues={}
+T_SHORT = 45
+T_MED = 90
+T_LONG = 180
 
-function dialogues.printdialogue(d,i)
-    printh('--dialogues['..i..']--')
-    for x=1,#d.sections do 
-        printh(' section['..x..']')
-        local section = d.sections[x]
-        for y=1,#section.phrases do 
-            printh(' phrase['..y..']='..section.phrases[y].text)
-        end
-    end
+stage = {}
+stage.__index = stage
+
+function stage:new(t)
+	local st = {
+		title=t,
+		sections={},
+		index=1,
+		li=1,
+		said=false,
+		t=0,
+		complete=false,
+		machine=nil,
+		on_complete=nil,
+		win_section=nil,
+		lose_section=nil
+	}
+	setmetatable(st,stage)
+	return st
 end
 
-dialogue.states={observing=0,crusing=1,playing=2,finish=3}
-function dialogue:reset()
-    self.index = 1
-    self.complete = false
-    self.continuesequence = true
-    for sec in all(self.sections) do
-        sec.index = 1
-    end
+function stage:section(lines)
+	local sec = {lines=lines}
+	add(self.sections,sec)
+	self.flow_end = #self.sections
+	return sec
 end
 
-function dialogue:init()
-    self:changestate(dialogue.states.observing)
-end
-function dialogue:changestate(s)
-    local states = {
-        [dialogue.states.observing] = function()
-            gm.level.pong.cfg.ai_enabled=false;
-            printh('observing')
-        end,
-        [dialogue.states.crusing] = function()
-            gm.level.textbox:open(function() gm:event(level.events.tb_open) end)
-            printh('crusing')
-        end,
-        [dialogue.states.playing] = function()
-            add_timer(100,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
-            self.continuesequence=false
-            gm.level.pong.cfg.ai_enabled=true;
-            hud.p1_score=0
-            hud.p2_score=0
-            printh('playing')
-        end,
-        [dialogue.states.finish] = function()
-            add_timer(100,function () gm.level.textbox:open(function() gm:event(level.events.tb_open) end) end)
-            self.continuesequence=false
-            printh('finish')
-        end
-    }
-
-    local state = states[s]
-    if state then
-        state()
-        self.state=s
-    end
+function stage:branch(lines)
+	add(self.sections,{lines=lines})
+	return #self.sections
 end
 
-function dialogue:update()
-    local states = {
-        [dialogue.states.observing] = function()
-            if hud.p2_score > 1 then self:changestate(dialogue.states.crusing) end
-        end,
-        [dialogue.states.crusing] = function()
-            if self.index > 4 then self:changestate(dialogue.states.playing) end
-        end,
-        [dialogue.states.playing] = function()
-            if hud.p1_score > 5 then self:changestate(dialogue.states.finish) end
-            if hud.p2_score > 5 then 
-                self.index+=1
-                self:changestate(dialogue.states.finish)
-            end
-        end,
-        [dialogue.states.finish] = function()
-        end
-    }
-
-    local state = states[self.state]
-    if state then
-        state()
-    end
+function line(text,dur)
+	return {text=text,dur=dur or T_MED}
 end
 
-local dialogue_denial = dialogue:new('denial',0,false)
-dialogues[1]=dialogue_denial
-local section = dialogue.create_section()
-add(dialogue_denial.sections,section)
-    add(section.phrases,dialogue.create_phrase('hello!?',7,360))
-local section2 = dialogue.create_section()
-add(dialogue_denial.sections,section2)
-    add(section2.phrases,dialogue.create_phrase('where is the second player?',7,360))
-    --add(section2.phrases,dialogue.create_phrase('are they in the bathroom?',7,480))
-    --add(section2.phrases,dialogue.create_phrase('maybe you should wait for them',7,100))
-    --add(section2.phrases,dialogue.create_phrase('its their quarter too',7,200))
-local section3 = dialogue.create_section()
-add(dialogue_denial.sections,section3)
-    --add(section3.phrases,dialogue.create_phrase('you know pong is a 2-player game right?',7,360))
-    add(section3.phrases,dialogue.create_phrase('dont have any friends?',7,240))
-    --add(section3.phrases,dialogue.create_phrase('sorry what i mean is',7,120))
-    --add(section3.phrases,dialogue.create_phrase('do you want some help?',7,200))
-local section4 = dialogue.create_section()
-add(dialogue_denial.sections,section4)
-    -- add(section4.phrases,dialogue.create_phrase('never got to play before',7,360))
-    -- add(section4.phrases,dialogue.create_phrase('i bet i am really good',7,180))
-    add(section4.phrases,dialogue.create_phrase('brb, gonna jump in real quick',7,360))
-local section5 = dialogue.create_section()
-    add(dialogue_denial.sections,section5)
-    add(section5.phrases,dialogue.create_phrase('there we go',7,240))
-    add(section5.phrases,dialogue.create_phrase('alright, this feels good',7,360))
-    add(section5.phrases,dialogue.create_phrase('a little trickier than I thought',7,180))
-    add(section5.phrases,dialogue.create_phrase('i will shut up now so we can play',7,180))
-local section6 = dialogue.create_section()
-add(dialogue_denial.sections,section6)
-    add(section6.phrases,dialogue.create_phrase('see, just as i said',7,240))
-    add(section6.phrases,dialogue.create_phrase('i am good at this game',7,240))
-local section7 = dialogue.create_section()
-add(dialogue_denial.sections,section7)
-    add(section7.phrases,dialogue.create_phrase('hmm, i lost',7,240))
-    add(section7.phrases,dialogue.create_phrase('thats not possible',7,240))
+function stage:cur()
+	local sec = self.sections[self.index]
+	return sec and sec.lines[self.li]
+end
 
-dialogues[2]=dialogue:new('anger',8,true)
-dialogues[3]=dialogue:new('bargining',9,true)
-dialogues[4]=dialogue:new('depression',1,true)
-dialogues[5]=dialogue:new('acceptance',3,true)
+function stage:goto_section(i)
+	if (not self.sections[i]) return
+	self.index = i
+	self.li = 1
+	self.said = false
+	self.t = 0
+	self.complete = false
+end
+
+function stage:advance()
+	self.said = false
+	self.t = 0
+	local sec = self.sections[self.index]
+	self.li += 1
+	if self.li > #sec.lines then
+		if self.stop_at_end then
+			self.li = #sec.lines
+			self:finish()
+			return
+		end
+		self.li = 1
+		self.index += 1
+		if self.index > self.flow_end then
+			self.index = self.flow_end
+			self.li = #sec.lines
+			self:finish()
+		end
+	end
+end
+
+function stage:finish()
+	if (self.complete) return
+	self.complete = true
+	local c = self.on_complete
+	if c then
+		self.on_complete = nil
+		c()
+	end
+end
+
+function stage:reset()
+	self.index = 1
+	self.li = 1
+	self.said = false
+	self.t = 0
+	self.complete = false
+	self.stop_at_end = false
+	self.on_complete = nil
+	if (self.init) self:init()
+end
+
+function stage:resolve(w)
+	local i = w == 2 and self.win_section or self.lose_section
+	if (not i) return false
+	self:goto_section(i)
+	self.stop_at_end = true
+	return true
+end
+
+function stage:update(tb)
+	if (self.machine) self:machine()
+	if (self.complete) return
+
+	local ln = self:cur()
+	if (not ln) return
+
+	if not self.said then
+		tb:say(ln.text)
+		self.said = true
+		self.t = 0
+		return
+	end
+
+	if (not tb:done()) return
+
+	self.t += 1
+	if (self.t >= ln.dur) self:advance()
+end
+
+-->8
+stages = {}
+
+local denial = stage:new("denial")
+stages[1] = denial
+
+denial:section({
+	line("hello!?",T_LONG)
+})
+denial:section({
+	line("where is the second player?",T_LONG),
+	line("are they in the bathroom?",T_LONG),
+	line("maybe you should wait for them",T_SHORT),
+	line("its their quarter too",T_MED)
+})
+denial:section({
+	line("you know pong is a 2-player game right?",T_LONG),
+	line("dont have any friends?",T_MED),
+	line("sorry what i mean is",T_SHORT),
+	line("do you want some help?",T_MED)
+})
+denial:section({
+	line("never got to play before",T_LONG),
+	line("i bet i am really good",T_MED),
+	line("brb, gonna jump in real quick",T_LONG)
+})
+denial:section({
+	line("there we go",T_MED),
+	line("alright, this feels good",T_LONG),
+	line("a little trickier than I thought",T_MED),
+	line("i will shut up now so we can play",T_MED)
+})
+denial.win_section = denial:branch({
+	line("see, just as i said",T_MED),
+	line("i am good at this game",T_MED)
+})
+denial.lose_section = denial:branch({
+	line("hmm, i lost",T_MED),
+	line("thats not possible",T_MED)
+})
+
+function denial:init()
+	self.armed = false
+end
+
+function denial:machine()
+	if not self.armed and hud.p2_score > 1 then
+		self.armed = true
+		gm.level.pong.cfg.ai_enabled = true
+		hud.p1_score = 0
+		hud.p2_score = 0
+	end
+end
+
+for i=2,5 do
+	local st = stage:new("act"..i)
+	stages[i] = st
+	for a=1,3 do
+		local ls = {}
+		for b=1,3 do
+			add(ls,line("act "..i.." section "..a.." line "..b,T_MED))
+		end
+		st:section(ls)
+	end
+	st.win_section = st:branch({line("act "..i.." win",T_MED)})
+	st.lose_section = st:branch({line("act "..i.." lose",T_MED)})
+end
 
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
