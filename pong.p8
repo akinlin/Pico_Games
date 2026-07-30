@@ -11,6 +11,37 @@ BALL_VZONES = {-1.171,-0.780,-0.390,0,0,0.390,0.780,1.171}
 BALL_ZONE_SIZE = 0.75
 SERVE_DELAY = 102
 SERVE_X = 66
+CD_ID = "metapong_1972_1"
+ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+NAME_ADDR = 0x5e04
+
+function cd_init()
+    cartdata(CD_ID)
+end
+
+function cd_checkpoint()
+    return mid(0, flr(dget(0)), 5)
+end
+
+function cd_save_checkpoint(n)
+    dset(0, mid(0, flr(n), 5))
+end
+
+function cd_name()
+    local a,b,c = peek(NAME_ADDR, 3)
+    if (a+b+c == 0) return nil
+    local m = #ALPHABET
+    if (a > m or b > m or c > m) return nil
+    return sub(ALPHABET,a,a)..sub(ALPHABET,b,b)..sub(ALPHABET,c,c)
+end
+
+function cd_save_name(a,b,c)
+    poke(NAME_ADDR, a, b, c)
+end
+
+function cd_reset()
+    memset(0x5e00, 0, 0x100)
+end
 
 C_BG = 0
 C_PADDLE = 1
@@ -70,6 +101,8 @@ function init_crt()
 end
 
 PHOS_NAMES = {"off","ball","full"}
+RESET_LABELS = {"reset data","reset: sure?","reset: done"}
+reset_state = 0
 
 function init_menu()
     menuitem(1,"act "..(DEBUG_ACT or "auto"),function()
@@ -80,24 +113,24 @@ function init_menu()
         init_menu()
         return true
     end)
-    menuitem(2,"accel "..p.cfg.paddle_accel[2],function(b)
-        local v = p.cfg.paddle_accel[2] + (b&1>0 and -0.02 or 0.02)
-        p.cfg.paddle_accel[2] = mid(0.02,v,0.5)
+    menuitem(2,RESET_LABELS[reset_state+1],function()
+        if reset_state == 1 then
+            cd_reset()
+            reset_state = 2
+        elseif reset_state == 2 then
+            reset_state = 0
+        else
+            reset_state = 1
+        end
         init_menu()
         return true
     end)
-    menuitem(3,"pmax "..p.cfg.paddle_max_speed[2],function(b)
-        local v = p.cfg.paddle_max_speed[2] + (b&1>0 and -0.25 or 0.25)
-        p.cfg.paddle_max_speed[2] = mid(0.5,v,6)
-        init_menu()
-        return true
-    end)
-    menuitem(4,"phosphor "..PHOS_NAMES[crt.phos+1],function()
+    menuitem(3,"phosphor "..PHOS_NAMES[crt.phos+1],function()
         crt.phos = (crt.phos + 1) % 3
         init_menu()
         return true
     end)
-    menuitem(5,"cpu "..(crt.cpu and "on" or "off"),function()
+    menuitem(4,"cpu "..(crt.cpu and "on" or "off"),function()
         crt.cpu = not crt.cpu
         init_menu()
         return true
@@ -221,7 +254,7 @@ end
 function game_manager:input(e)
 	local inputevents = {
 		[game_manager.inputevents.key_pressed] = function()
-			if self.state == game_manager.states.menu or game_manager.states.intermission then
+			if self.state == game_manager.states.menu or self.state == game_manager.states.intermission then
 				if self.level_index <= #self.levels then
 					self:change_state(game_manager.states.level)
 					self.level:load()
@@ -246,6 +279,8 @@ function game_manager:update()
 
 	if self.state == game_manager.states.level then
 		self.level:update()
+    elseif self.state == game_manager.states.menu then
+        p:update_game_state()
     elseif gm.state == game_manager.states.gameover then
         update_gameover_state()
         self.level.textbox:update()
@@ -262,7 +297,9 @@ function game_manager:draw()
 			print("title",44,60,C_SCORE)
         end,
 		[game_manager.states.menu] = function()
-			print("press ❎ to start",32,64,C_SCORE)
+            pong.draw_balls()
+            local n = cd_name()
+            if (n) print(n,64-(#n*2),2,C_SCORE)
         end,
 		[game_manager.states.options] = function()
 			print("options",44,60,C_SCORE)
@@ -309,8 +346,7 @@ function level:load()
     self.pong:start_match()
     self.dialogue:init()
 
-    player1.visible = true
-    player2.visible = true
+    self.pong:set_attract(false)
 end
 
 function level:event(e)
@@ -373,6 +409,7 @@ function _init()
 	gm = game_manager:new()
     gm.screenwidth = 128
     gm.screenheight = 128
+    cd_init()
     init_crt()
 	tb = textbox:new(0,96,127,31,C_BG)
     p = pong:new()
@@ -383,6 +420,10 @@ function _init()
 	gm:add_level(level:new(dialogues[3],tb,p))
 	gm:add_level(level:new(dialogues[4],tb,p))
 	gm:add_level(level:new(dialogues[5],tb,p))
+
+    local cp = cd_checkpoint()
+    if (cp >= 5) cp = 0
+    gm.level_index = mid(1, cp+1, #gm.levels)
 end
 
 function _update60()
@@ -391,9 +432,14 @@ function _update60()
 end
 
 function update_input()
-	if btnp(❎) then
-		gm:input(game_manager.inputevents.key_pressed)
-	end
+    local st = gm.state
+    if (st != game_manager.states.menu and st != game_manager.states.intermission) return
+    for i=0,5 do
+        if btnp(i) then
+            gm:input(game_manager.inputevents.key_pressed)
+            return
+        end
+    end
 end
 
 function update_gameover_state()
@@ -496,7 +542,19 @@ end
 
 function pong:reset_game()
     self:start_match()
+    self:set_attract(true)
     gm:change_state(game_manager.states.menu)
+end
+
+function pong:set_attract(on)
+    self.attract = on
+    for w in all(sidewalls) do
+        w.collsion = on
+    end
+    player1.collsion = not on
+    player2.collsion = not on
+    player1.visible = not on
+    player2.visible = not on
 end
 
 function pong:start_match()
@@ -520,6 +578,15 @@ function pong:init_board()
     local bottom = self:create_wall(0,PLAYFIELD_BOTTOM+1,gm.screenwidth,3)
     bottom.visible = false
     add(walls, bottom)
+
+    sidewalls = {
+        self:create_wall(-3,-3,3,PLAYFIELD_BOTTOM+7),
+        self:create_wall(gm.screenwidth,-3,3,PLAYFIELD_BOTTOM+7)
+    }
+    for w in all(sidewalls) do
+        w.visible = false
+        add(walls, w)
+    end
 
     self:init_net()
 end
@@ -661,7 +728,7 @@ function pong:create_wall(xpos,ypos,w,h)
 end
 
 function pong:update_game_state()
-    self:handle_game_input()
+    if (not self.attract) self:handle_game_input()
 
     for i=1,#balls do
         local b = balls[i]

@@ -340,6 +340,45 @@ curves. Second, the ability to change that response *situationally* felt good en
 that it got written down as a possible feature rather than a setting. Some of the best
 ideas arrive disguised as debug tools.
 
+## M9 — The machine when nobody is watching
+
+A real Pong cabinet was never off. Sitting in the corner of a bar at three in the
+morning, it kept the ball in play against itself, bouncing off all four walls with no
+paddles on the screen and the last customer's score still showing. That's attract mode,
+and it's the first thing Meta Pong needs to look like a machine rather than a program —
+you're supposed to walk up to something already running.
+
+So the ball now plays alone until you touch a button. Any button: the original had no
+menu to navigate, and neither does this. The screen carries nothing but the net, the
+previous score, and a ball that doesn't need you.
+
+**The ball that was there all along.** First attempt, the attract screen showed the net
+and the score and nothing else. No ball. It turned out the ball had been bouncing
+correctly around the field the entire time — every wall, every angle, perfectly — and
+simply was never drawn. Somewhere between "it doesn't work" and "it works" there's a
+category of bug where the thing is already right and you just can't see it.
+
+**The bug that waited for permission.** Making *any* button start the game woke something
+that had been asleep since long before this rework: a check that was supposed to ask "are
+we on the start screen?" but, through a small slip, always answered yes. It meant that
+pressing the start button *during a match* would quietly restart the match. Nobody had
+ever noticed, because the start button was one you'd never press mid-game. The moment any
+button counted, moving your paddle began resetting the ball. A latent bug can sit
+harmlessly for years and then detonate the instant you widen the door.
+
+**The game remembers you now.** Finish an act and it's written down; come back tomorrow
+and you resume where you stopped. That's a small thing that quietly changes what the game
+is — five acts is a lot to ask in one sitting, and a machine that remembers you is a
+machine you can leave.
+
+There's a footnote in the hardware here that decided which version of PICO-8 this game
+targets. Older builds had a flaw where saving twice in quick succession would silently
+lose the second save — exactly what happens when you win an act and the game writes both
+your progress and your name. It's fixed in the version we build against, and confirming
+that fix was the one thing in this whole project that could be tested completely, with
+certainty, before anyone played it: write twice, quit, come back, look. It was still
+there.
+
 ---
 
 ## Running notes for the post-mortem
