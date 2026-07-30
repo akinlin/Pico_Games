@@ -292,29 +292,78 @@ This is the milestone the whole plan is built around. Everything above becomes a
 **Spec:** Tech Design → *The Narrative / Dialogue Engine*; Game Design → *Dialogue
 Trigger Catalog*
 
-**Scope**
+Split into four sub-milestones. M10 as originally written bundled four separable
+concerns, and had three further items deferred into it (the state collapse from M8, the
+win/checkpoint path from M8/M9, the phosphor decision from M7b) plus audio folded in.
+Order is `a → b → c → d`: state is foundational, audio is a prerequisite of the
+typewriter cue, and the engine needs a window to drive.
 
-- Rename `dialogue`/`phrase` → `stage`/`line` (#33).
-- Textbox lives in the 32px band; `closed → opening → open → closing`; slides up/down.
-- Letter-by-letter reveal, blinking cursor, rolling scrollback (#28's text-fitting POC
-  feeds this).
-- Timed (Short/Med/Long) and Game-event triggers.
-- Win/lose branching (#27) — the existing system is single-path.
-- Per-line audio cue.
-- Completion callback to the owning `level` so the next Section can load.
-- **Scrollback clears on every close/reopen** — a Section never inherits the previous
-  Section's lines.
+### M10a — State collapse and match resolution
+
+- Collapse `game_manager`'s six states (`title`/`menu`/`options`/`level`/`gameover`/
+  `intermission`) to **`attract`** and **`level`**.
+- Act on `pong.winner`:
+  - **Win** — write the checkpoint, advance `level_index`, load the next act directly.
+  - **Loss** — return to **attract**, keeping `level_index` so the same act resumes when
+    the player comes back. Attract reverts to Denial's black-and-white palette.
+  - **Act 5 won** — checkpoint 5, back to attract, `level_index` reset to Denial.
+- **Closes M9's open gap** — the persistence layer has no caller until this lands.
+
+**Acceptance:** winning an act advances and persists; losing replays the same act;
+quitting and relaunching resumes at the right act *through play* rather than by writing
+a checkpoint by hand.
+
+### M10b — Audio
+
+- The three hardware sounds, all taps off the vertical ball-position counter in the
+  original: hit ~492 Hz / ~16 ms, bounce ~246 Hz / ~16 ms, score ~246 Hz / ~240 ms.
+- Muted in `attract`.
+
+**Asset boundary — audio is a human-created asset.** The three sounds above are derived
+from documented reference-material specifications (frequency and duration), so
+reproducing them is transcription, not authorship. **Anything else is placeholder only.**
+The per-character typewriter cue is a new creative asset and must not be authored here:
+reuse one of the three game sounds as an explicit placeholder, flagged for replacement.
+
+**Acceptance:** all three fire at the right moments and are silent in attract.
+
+### M10c — The terminal window
+
+- Textbox occupies the 32px band at rows 96–127.
+- **No slide/open/close animation.** The window is permanently open — a single scrolling
+  scrollback view where lines are removed as they scroll off the top. The
+  `closed → opening → open → closing` state machine in the Tech Design is **dropped**;
+  building a slide only to remove it later is wasted effort, and the CLI is getting
+  further design attention.
+- Letter-by-letter reveal, blinking cursor.
+- Per-character or per-line audio cue (placeholder per M10b).
 - **No player advance or skip input.** Dialogue is fully automatic.
 
-**Acceptance**
+**Unblocks** the M7b `phosphor_mode` `full` vs `ball` decision, which needs animated text
+to judge.
 
-- Text never draws above row 96 and never occludes the playfield.
-- No button does anything to the dialogue window.
-- Open/close animations complete and fire their callbacks; a new Section opening while
-  the window is already open transitions without replaying the open animation.
-- A Section can be interrupted mid-print by a game event and switch content in the same
-  open window (Denial's checkpoint-interrupts-non-sequitur behavior).
-- Timers are frame-counted at 60fps, not `time()`-based.
+**Acceptance:** text never draws above row 96 and never occludes the playfield; no button
+does anything to the window; lines scroll off cleanly.
+
+### M10d — The narrative engine
+
+- Rename `dialogue`/`section`/`phrase` → `stage`/`section`/`line` (#33).
+- Timed (Short/Med/Long) and Game-event triggers.
+- Win/lose branching (#27) — the existing system is single-path.
+- A Section can be interrupted mid-print by a game event and switch content
+  (Denial's checkpoint-interrupts-non-sequitur behavior).
+- Completion callback to the owning `level` so the next Section can load.
+- Per-act `stage` state machines plug into a shared framework rather than subclassing.
+
+**Act dialogue content is not in scope** — it is author-written and lands in M12–M16.
+Denial's existing lines serve as the test harness.
+
+**Acceptance:** Denial's existing content plays through the new engine; timers are
+frame-counted at 60fps, not `time()`-based; a game event can interrupt a Section
+mid-print.
+
+**Open:** Short/Med/Long have no second values anywhere in the docs. M10d needs starting
+numbers and a tuning round, against the ~20 minute playthrough target.
 
 ---
 
@@ -377,6 +426,9 @@ from commit messages.
 | M8 | **Parking Lot addition:** explore `paddle_accel` / `paddle_max_speed` as expressive per-situation settings rather than fixed per-act values — being able to change paddle response in different situations was noticeably good in playtest. Flagged deliberately as a *later* exploration, not scope creep into Alpha |
 | M8 | Playtest-tuned paddle values landed at `paddle_accel = 0.4`, `paddle_max_speed = 4.5` for the **player**. COM stays at 0.08 / 2.5 — the values it was actually playtested against. COM's own paddle response has never been tuned independently and probably wants its own pass, since it interacts with the `ai_levels` difficulty curve |
 | M8 | Measured **12%** of frame for 40 balls at tier 3 with phosphor off, against the ~17% budget estimate. The swarm has more headroom than the design assumed |
+| M10a | **Game Design change:** a loss no longer resets and immediately replays the act. It returns the player to **attract**, with the palette reverting to Denial's black and white — COM has gone quiet and is waiting for you to come back. Pressing start resumes the same act (fresh dialogue, same stage). Tech Design's *Resolving a level result* table says "Reset current level, replay same act", which describes the destination but not the trip through attract |
+| M10c | **Tech Design change:** the textbox `closed → opening → open → closing` state machine and its slide motion are **dropped**. The window is permanently open, a single scrolling scrollback view where lines are removed as they scroll off the top. Building the slide only to remove it later is wasted effort, and the CLI is getting further design attention |
+| M10b | **Tech Design / process addition:** record the audio asset boundary — audio is a human-created asset. The three hardware sounds are transcribed from documented reference-material specs and are in bounds; anything else, including the typewriter cue, is placeholder-only pending a human-authored replacement |
 | M9 | **Parking Lot addition:** surface the "press any button to start" prompt through the CLI terminal band rather than as text over the playfield. Attract is meant to look like an unattended machine, so nothing should overlay the field — but the affordance still needs to exist somewhere, and the terminal is where the machine already speaks |
 | M9 | Attract currently rides on the legacy `menu` state. M10's state collapse should make it a real `attract` state. Note that `game_manager:input` contained an always-true condition (`state == menu or states.intermission` — the second operand was a bare constant, not a comparison), which meant *any* start press reloaded the level from *any* state. Dormant while only ❎ triggered it; M9's any-button rule exposed it |
 | M8 | `win_score` / `sudden_death` are plumbed and set `pong.winner`, but nothing acts on it — win/lose transitions live in `game_manager`'s states, deferred to M10 |
