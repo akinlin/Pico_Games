@@ -432,6 +432,77 @@ history — the one everybody can still make with their mouth — is a side effe
 because a circuit that was doing something else happened to be audible, and somebody was
 paying attention.
 
+## M10c — Giving the machine a voice
+
+A quarter of the screen has been sitting empty since early on. Not wasted — reserved. The
+playfield is the top three quarters, sized so the ball's angles come out exactly as they
+did in 1972, and the strip underneath belongs to COM. It's the one part of the display
+that isn't a reconstruction of anything; it's the part where the machine talks back.
+
+It works like a terminal, because that's what it should feel like: something typing at
+you in real time rather than presenting you with finished sentences. Characters appear
+one at a time with a cursor blinking at the end. Lines that run long wrap and keep going.
+Completed lines scroll upward and eventually off the top, gone.
+
+Two decisions shaped it, and both were about taking things away.
+
+The original plan had the window slide open and closed as COM started and stopped
+talking, with the scrollback wiped clean each time. We dropped both. The window is simply
+always there, and nothing is ever cleared — old lines just drift up and out as new ones
+arrive. It reads much more like a machine that has been running the whole time, which is
+the thing the game keeps insisting on: COM was always in there. A window that appears when
+he speaks implies he arrives when he speaks.
+
+The other was refusing to build the slide animation at all, once we knew it was going. The
+plan called for it, the spec described four states and a motion path, and it would have
+been perhaps forty minutes of work — to then delete. Writing the code you know you'll
+throw away is a habit that feels like diligence and is just cost.
+
+**Pacing is characterisation.** How fast the words appear turns out to matter more than
+almost any individual line. Too quick and COM is a computer printing output. Too slow and
+he's laboured, or worse, you start waiting on him. The current speed is about thirty
+characters a second, which reads as someone typing quickly and thinking as they go. That
+was a guess that happened to land, which is not the usual outcome.
+
+## M10d — Teaching the machine to talk
+
+The last piece of scaffolding. Everything before this built the room COM speaks in; this
+built the part that decides what he says and when.
+
+Three things a talking character needs that a scrolling text box doesn't give you.
+
+**Timing that isn't uniform.** A line that lands needs air after it; a throwaway remark
+shouldn't sit on screen waiting to be admired. So every line carries a hold — short,
+medium or long — counted from the moment it *finishes* typing rather than from when it
+starts. That distinction matters more than it sounds: measured from the start, a long
+line eats its own pause and the rhythm collapses exactly where you wanted emphasis.
+
+**Reacting to the game rather than to a clock.** COM's opening depends on you scoring
+twice while the second paddle sits unmanned. That isn't a timer, it's a thing he notices.
+Each act gets a hook that runs every frame and can watch whatever it likes — the score,
+the ball, how badly you're losing — and interrupt whatever he was saying. Denial's already
+does it: your second point, and mid-sentence he takes the paddle and quietly resets the
+score to nothing.
+
+**Being able to lose.** Up to now the dialogue ran one path from start to end. Now the
+outcome of the match chooses an ending. Win and he has a line about how good he is at
+this. Lose and he has a different one.
+
+That last one produced the tidiest bug of the session. The win and lose lines were simply
+the sixth and seventh sections of the act — so once he'd finished his fifth, he cheerfully
+carried on into *both* endings while you were still playing. He'd announce he'd won,
+then that he'd lost, then go quiet.
+
+The fix was to stop treating an ending as "the next thing." Endings sit outside the
+sequence entirely and are reachable only by the match deciding to go there. It's now
+structurally impossible to wander into one, which is the right shape for the idea: an
+ending isn't a later part of the conversation, it's a different kind of thing.
+
+**And he gets the last word.** Winning used to freeze the field for two seconds and move
+on. Now the field clears, COM says his piece about it, and only then does the game
+advance. The transition waits for him to finish. It costs nothing and it changes who the
+pause belongs to.
+
 ---
 
 ## Running notes for the post-mortem
