@@ -12,6 +12,9 @@ BALL_ZONE_SIZE = 0.75
 SERVE_DELAY = 102
 SERVE_X = 66
 RESOLVE_DELAY = 120
+SND_HIT = 0
+SND_BOUNCE = 1
+SND_SCORE = 2
 CD_ID = "metapong_1972_1"
 ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
 NAME_ADDR = 0x5e04
@@ -769,6 +772,7 @@ end
 
 function pong:score_point(b,who)
     local c = self.cfg
+    self:snd(SND_SCORE)
     if c.scoring_enabled then
         if who == 1 then
             hud.p1_score += c.score_multiplier_com
@@ -830,6 +834,10 @@ function pong:handle_game_input()
     self:move_paddle(player2,d)
 end
 
+function pong:snd(n)
+    if (not self.attract) sfx(n)
+end
+
 function pong:speed_tier(hits)
     if (self.cfg.speed_tier_pin > 0) then return self.cfg.speed_tier_pin end
     if (hits >= BALL_HITS_MAX) then return 3 end
@@ -877,6 +885,7 @@ function pong:update_ball(b)
             py = pt.y
             ndy = -ndy
         end
+        if (hitwall != player1 and hitwall != player2) self:snd(SND_BOUNCE)
     end
 
     if (hitwall == player1) or (hitwall == player2) then
@@ -891,6 +900,7 @@ function pong:update_ball(b)
         if (ndx < 0) then ndx = -spd else ndx = spd end
         ndy = BALL_VZONES[pong.contact_zone(pt.y, hitwall.y)]
         if (self.cfg.scoring_model == "intercept" and hitwall == player2) self.pending = b
+        self:snd(SND_HIT)
         player1.collsionpt = nil
         player2.collsionpt = nil
     end
@@ -1364,3 +1374,7 @@ __gfx__
 00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+__sfx__
+000201002335000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000201001735000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001f01001735000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
