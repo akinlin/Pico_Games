@@ -365,7 +365,6 @@ function level:load()
     local ph = self.dialogue.phrase
 	self.textbox.sectiontitle=self.dialogue.title
 	self.textbox.sectionphrase=ph and ph.text or ""
-	self.textbox.rect.color=C_BG
     self.pong:configure(ACT_CONFIGS[mid(1,DEBUG_ACT or gm.level_index,#ACT_CONFIGS)])
     self.pong:start_match()
     self.dialogue:init()
@@ -390,11 +389,13 @@ function level:event(e)
             self.textbox:close(function () gm:event(game_manager.events.level_complete) end)
         end,
         [level.events.section_complete] = function()
-            self.textbox.sectionphrase=self.dialogue.phrase.text
+            local ph = self.dialogue.phrase
+            self.textbox.sectionphrase = ph and ph.text or ""
             self.textbox:close(function () gm:event(level.events.tb_closed) end)
         end,
         [level.events.phrase_complete] = function()
-            self.textbox.sectionphrase=self.dialogue.phrase.text
+            local ph = self.dialogue.phrase
+            self.textbox.sectionphrase = ph and ph.text or ""
         end
     }
 
@@ -834,6 +835,9 @@ function pong:handle_game_input()
     self:move_paddle(player2,d)
 end
 
+function snd_type()
+end
+
 function pong:snd(n)
     if (not self.attract) sfx(n)
 end
@@ -1140,106 +1144,115 @@ function dialogue:event(e)
 	end
 end
 
+TB_ROWS = 4
+TB_COLS = 31
+TB_REVEAL = 2
+TB_LH = 6
+
 textbox = {}
 textbox.__index = textbox
-textbox.states = {closed=1,opening=2,open=3,closing=4}
 function textbox:new(xpos,ypos,w,h,c)
 	local tb = {
-		visible=false,
-		textvisible=false,
-		state=textbox.states.closed,
-		callback=nil,
-
-		rect = {
-			x0=xpos,
-			y0=ypos,
-			x1=xpos,
-			y1=ypos,
-			color=c
-		},	
-		width=w,
-		height=h,
-
-		sectiontitle='no title',
-		sectionphrase='no phrase',
-		
-		filled=true
+		x=xpos,
+		y=ypos,
+		rows={},
+		queue={},
+		src="",
+		cur="",
+		i=0,
+		t=0,
+		blink=0,
+		pending=nil,
+		last=nil,
+		sectiontitle="",
+		sectionphrase=""
 	}
 	setmetatable(tb,textbox)
 	return tb
 end
 
-blinkert=0
-blinkerc=16
-function textbox:draw()
-	if self.visible then
-		local rect = self.rect
-		if self.filled then
-			rectfill(rect.x0, rect.y0, rect.x1, rect.y1, rect.color)
+function textbox:wrap(s)
+	local out,line = {},""
+	for w in all(split(s," ",false)) do
+		local t = line == "" and w or line.." "..w
+		if #t <= TB_COLS then
+			line = t
 		else
-			rect(rect.x0, rect.y0, rect.x1, rect.y1, rect.color)
+			if (line != "") add(out,line)
+			line = w
 		end
+	end
+	if (line != "") add(out,line)
+	return out
+end
 
-		if self.textvisible then
-            blinkert+=1
-            if blinkert > 15 then
-                blinkert = 0
-                if blinkerc == 16 then blinkerc = 32 else blinkerc = 16 end
-            end
-			print(chr(62)..' '..self.sectionphrase..' '..chr(blinkerc),rect.x0+2,rect.y0+2,C_SCORE)
-		end
+function textbox:say(s)
+	if (self.cur != "") self:push(self.cur)
+	self.queue = self:wrap(s)
+	self:next_row()
+end
+
+function textbox:next_row()
+	self.src = deli(self.queue,1) or ""
+	self.cur = ""
+	self.i = 0
+	self.t = 0
+end
+
+function textbox:push(row)
+	add(self.rows,row)
+	while #self.rows >= TB_ROWS do
+		deli(self.rows,1)
 	end
 end
 
 function textbox:update()
-	if self.state == textbox.states.opening then
-		local done=0
-		if self.rect.x1 < self.rect.x0 + self.width then
-			self.rect.x1 += 15
-		else done+=1
-		end
-		if self.rect.y1 < self.rect.y0 + self.height then
-			self.rect.y1 += 15
-		else done+=1
-		end
+	self.blink = (self.blink + 1) % 30
 
-		if done == 2 then
-			self.state = textbox.states.open
-			self:callback(level.events.tb_open)
-		end
+	if self.sectionphrase != self.last then
+		self.last = self.sectionphrase
+		self:say(self.sectionphrase)
 	end
 
-	if self.state == textbox.states.closing then
-		local done=0
-		if self.rect.x1 > self.rect.x0 then
-			self.rect.x1 -= 15
-		else done+=1
+	if self.i < #self.src then
+		self.t += 1
+		if self.t >= TB_REVEAL then
+			self.t = 0
+			self.i += 1
+			self.cur = sub(self.src,1,self.i)
+			snd_type()
 		end
-		if self.rect.y1 > self.rect.y0 then
-			self.rect.y1 -= 15
-		else done+=1
-		end
-
-		if done == 2 then
-			self.state = textbox.states.closed
-			self.visible=false
-			self:callback(level.events.tb_closed)
-		end
+	elseif #self.queue > 0 then
+		self:push(self.cur)
+		self:next_row()
 	end
+
+	if self.pending then
+		local c = self.pending
+		self.pending = nil
+		c()
+	end
+end
+
+function textbox:draw()
+	local y = self.y + 2
+	for i=1,#self.rows do
+		print(self.rows[i], self.x+2, y, C_SCORE)
+		y += TB_LH
+	end
+	local c = self.cur
+	if (self.blink < 15) c = c..chr(16)
+	print(c, self.x+2, y, C_SCORE)
 end
 
 function textbox:open(cb)
-	self.visible=true
-	self.textvisible=true
-	self.state=textbox.states.opening
-	self.callback=cb
+	self.pending = cb
 end
 
 function textbox:close(cb)
-	self.textvisible=false
-	self.state=textbox.states.closing
-	self.callback=cb
+	self.pending = cb
 end
+
 -->8
 -->8
 dialogues={}

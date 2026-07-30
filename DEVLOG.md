@@ -432,6 +432,38 @@ history — the one everybody can still make with their mouth — is a side effe
 because a circuit that was doing something else happened to be audible, and somebody was
 paying attention.
 
+## M10c — Giving the machine a voice
+
+A quarter of the screen has been sitting empty since early on. Not wasted — reserved. The
+playfield is the top three quarters, sized so the ball's angles come out exactly as they
+did in 1972, and the strip underneath belongs to COM. It's the one part of the display
+that isn't a reconstruction of anything; it's the part where the machine talks back.
+
+It works like a terminal, because that's what it should feel like: something typing at
+you in real time rather than presenting you with finished sentences. Characters appear
+one at a time with a cursor blinking at the end. Lines that run long wrap and keep going.
+Completed lines scroll upward and eventually off the top, gone.
+
+Two decisions shaped it, and both were about taking things away.
+
+The original plan had the window slide open and closed as COM started and stopped
+talking, with the scrollback wiped clean each time. We dropped both. The window is simply
+always there, and nothing is ever cleared — old lines just drift up and out as new ones
+arrive. It reads much more like a machine that has been running the whole time, which is
+the thing the game keeps insisting on: COM was always in there. A window that appears when
+he speaks implies he arrives when he speaks.
+
+The other was refusing to build the slide animation at all, once we knew it was going. The
+plan called for it, the spec described four states and a motion path, and it would have
+been perhaps forty minutes of work — to then delete. Writing the code you know you'll
+throw away is a habit that feels like diligence and is just cost.
+
+**Pacing is characterisation.** How fast the words appear turns out to matter more than
+almost any individual line. Too quick and COM is a computer printing output. Too slow and
+he's laboured, or worse, you start waiting on him. The current speed is about thirty
+characters a second, which reads as someone typing quickly and thinking as they go. That
+was a guess that happened to land, which is not the usual outcome.
+
 ---
 
 ## Running notes for the post-mortem
