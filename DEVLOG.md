@@ -503,6 +503,43 @@ on. Now the field clears, COM says his piece about it, and only then does the ga
 advance. The transition waits for him to finish. It costs nothing and it changes who the
 pause belongs to.
 
+## M11 — Three letters
+
+Winning the whole thing earns you three characters. Up and down to pick a letter, left
+and right to move, one button to commit. No keyboard — the game runs on handhelds and
+phones where there isn't one, and a Pong cabinet wouldn't have had one anyway.
+
+Three characters because that's how long the names COM gives you are. Through the middle
+acts he stops calling you nothing and starts calling you something: DUM, then SKR, then
+WHR, then PLR. Names assigned to you by a machine that has decided what you are. Win the
+last act and you replace all of them with three characters of your own, and that's the
+one that stays on the front of the cabinet.
+
+The whole exchange is a high-score table with a single row, which is exactly what the
+original had.
+
+**The bug that froze the game.** Finishing the run, entering a name, and starting again
+would leave the game running but not *playing* — COM talked away happily while the ball
+sat still and the paddle ignored you.
+
+The cause was that finishing a match sets a flag saying who won, and the code that
+handles the ending forgot to clear it on one particular path — the path that only exists
+after the final act. So the game finished, went to name entry, came back, started
+Denial... and then immediately noticed there was still a winner recorded, concluded the
+match had ended, and froze the field to play the ending again. Every frame. Forever.
+
+It's the sort of bug that reading the code doesn't find, because every individual piece is
+correct. What found it was being able to *run* the game headlessly — start it, force a
+win, step through six hundred frames, and print what the machine believed about itself.
+It reported the stuck flag in about a second, having spent a few minutes failing to spot
+it by eye.
+
+That turned out to matter beyond this one bug. The rule at the start of this project was
+that nothing about behaviour could be checked without a human playing it. That's now
+false twice over: the cart can be loaded to catch errors, and the game can be driven frame
+by frame to catch broken logic. What still needs a person is everything about how it
+*feels* — which, it turns out, is most of what matters.
+
 ---
 
 ## Running notes for the post-mortem
