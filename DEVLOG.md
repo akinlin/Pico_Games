@@ -407,6 +407,31 @@ match is over.
 Somewhere in there is a general rule about interfaces: don't show someone a control you
 have switched off.
 
+## M10b — Three sounds nobody composed
+
+The 1972 machine had no sound chip. It had no sound *anything* — there was no budget for
+it and no obvious way to do it. What it had was a counter circuit tracking where the ball
+was vertically, ticking away at audio frequencies as a simple consequence of counting
+fast.
+
+So they wired it to a speaker.
+
+All three of Pong's sounds — the paddle hit, the wall bounce, the point scored — are taps
+off that same counter, at different points. That's the entire sound design. It's why they
+sit exactly an octave apart: not a musical decision, just two bits of the same counter,
+one ticking twice as fast as the other. Nobody chose those notes. They were already there
+in the circuit, and someone noticed they could be heard.
+
+Reproducing them is therefore transcription rather than composition. The published
+measurements give frequency and duration; the waveform follows from what a counter tap
+physically is. The only genuinely invented number in all three sounds is how loud they
+are.
+
+There's something worth keeping in that. The most recognisable sound in video game
+history — the one everybody can still make with their mouth — is a side effect. It exists
+because a circuit that was doing something else happened to be audible, and somebody was
+paying attention.
+
 ---
 
 ## Running notes for the post-mortem
