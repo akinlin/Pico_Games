@@ -100,22 +100,35 @@ channel. The existing cart has a `draw_debug()` for collision-point visualizatio
 keep that pattern, keep it behind a flag, and strip it before a milestone closes so it
 doesn't eat the character budget.
 
-**Commits.** One milestone per branch, conventional-commit style subject lines,
-reference the issue number. Do not push or open PRs without being asked.
+**Git workflow.** One milestone per branch, conventional-commit style subject lines,
+reference the issue number. The four steps, in order:
 
-**Always branch from an up-to-date default branch.** The remote is `pico`
-(`github.com/akinlin/Pico_Games`) and the default branch is **`master`** — there is no
-`main`. Before writing any code:
+1. **Sync first.** The remote is `pico` (`github.com/akinlin/Pico_Games`) and the default
+   branch is **`master`** — there is no `main`.
 
-```bash
-git fetch pico && git checkout master && git merge --ff-only pico/master
-```
+   ```bash
+   git fetch pico && git checkout master && git merge --ff-only pico/master
+   ```
 
-Then branch. The local checkout has been found several commits behind `pico/master` at the
-start of a session, and the working tree looked clean, so nothing signalled it. In M11a
-this meant a full pass was written against a base that predated M11 and had to be redone —
-M11 had already changed the very code being edited. `git log --oneline master..pico/master`
-is the one-line check; run it before trusting a clean `git status`.
+2. **Branch** off that, and do the work there. Never commit to `master`.
+3. **Commit locally as progress is made** — don't save everything for one commit at the
+   end. Local commits are free and need no permission.
+4. **Ask before pushing.** When the work reaches a point worth publishing, say so and
+   **wait for an explicit go-ahead**. Pushing is the outward-facing step and is the user's
+   call every time; a go-ahead for one push does not authorize the next.
+
+**Every push in a unit of work goes to the same branch.** Do not open a second branch
+partway through — the user decides at merge time whether to squash, and that choice needs
+the whole history in one place.
+
+**The user owns PRs and merges.** Do not open, update, or merge a pull request, and do not
+offer to. Stop at the pushed branch and hand back.
+
+**Why step 1 has its own rule:** the local checkout has been found several commits behind
+`pico/master` at the start of a session with a clean working tree, so nothing signalled it.
+In M11a a full pass was written against a base that predated M11 and had to be redone from
+scratch — M11 had already rewritten the very code being edited. `git log --oneline
+master..pico/master` is the one-line check; run it before trusting a clean `git status`.
 
 ---
 
