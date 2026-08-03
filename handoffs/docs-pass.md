@@ -219,11 +219,15 @@ distinct blocks rather than one stream. Costs one of the five rows whenever both
 on screen — accepted deliberately for the visual separation.
 
 **26. Game Design — the completion beat runs through the console.** After the player
-confirms their nickname the band **clears**, the console prints `congrats <nickname>`, then
-`> run attract` types, then attract loads. It runs in Acceptance's palette, since the
-transition happens before the revert — same rule as any other stage ending. `congrats` is
-console *output* and carries no `>`, following the boot header rather than the command
-lines. **Both the wording and that prefix choice are placeholders for the author.**
+confirms their nickname the band **clears**, the console prints `> congrats <nickname>`,
+then `> run attract` types, then attract loads. It runs in Acceptance's palette, since the
+transition happens before the revert — same rule as any other stage ending. **The wording is
+a placeholder for the author.**
+
+This settles the `>` rule, which item 15 left implicit: **the prompt marks the console
+addressing the player, not a command being typed.** `congrats` is not a command and still
+carries it. The only console lines without a `>` are the two startup banner lines, which are
+the machine booting rather than the console speaking to anyone.
 
 **27. Tech Design — the band background costs the dialogue's phosphor trail.** Filling the
 band means the dimmed previous frame is overdrawn there every frame, so text inside it no
@@ -234,6 +238,22 @@ one and was already invisible; only the scroll-up smear and cursor blink trail a
 but the sentence needs correcting. If the glow is wanted back, the fill can be skipped when
 the console background equals the screen background — at the cost of the band behaving
 differently per act.
+
+**28. `DEBUG_ACT` is gone, and the act selector is real navigation.** The pause menu's act
+item used to reconfigure the `pong` instance only — the `level` never changed, so the stage
+and its dialogue stayed on whatever act was already running. It now sets `gm.level_index`,
+writes the checkpoint, clears the band and loads the level, so act, palette, dialogue and
+save state all move together. Left/right select, matching the accel and max-speed items.
+
+`DEBUG_ACT` was deleted rather than reworked. It pinned `set_palette` globally, which meant
+**attract could not show its own palette while an act was selected** — `set_palette(PAL_ATTRACT)`
+was silently overridden. With the selector driving `level_index` directly, nothing needed it.
+This also fixes the *"Dev scaffolding — decide what ships"* item below: the act selector is
+now worth keeping, and `DEBUG_ACT` is already gone.
+
+**One casualty to decide on:** `ACT_CONFIGS[6]` — the 40-ball tier-3 swarm stress config —
+is no longer reachable, because the selector caps at `#gm.levels` (5) and act 6 has no stage.
+It is still in the table. Either wire it to its own menu toggle or delete it.
 
 **24. Tech Design — the palette contrast rule gains a case.** Console green has no darker
 sibling that isn't Bargaining's own background (`ACT_PALETTES[3][1] = 3`). Harmless today,

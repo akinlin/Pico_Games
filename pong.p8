@@ -76,7 +76,7 @@ function nament:update()
         self.active = false
         tb:clear()
         cli_run({
-            {"congrats "..cd_name(),false,45},
+            {"> congrats "..cd_name(),false,45},
             {"> run attract",false,30}
         }, function() gm:to_attract() end)
     end
@@ -107,7 +107,6 @@ C_TRAIL2 = 5
 C_CLI = 6
 C_CLIBG = 7
 
-DEBUG_ACT = nil
 DEBUG_AI = true
 
 SCORE_Y = 8
@@ -154,7 +153,7 @@ CRAWL_RATE = 12
 crt = {phase=0, st=0, ty=999, tw=240, phos=true, cpu=false}
 
 function set_palette(n)
-    local i = mid(1,DEBUG_ACT or n,#ACT_PALETTES)
+    local i = mid(1,n,#ACT_PALETTES)
     local a,c = ACT_PALETTES[i], CLI_PALETTES[i]
     poke(0x5f10, a[1],a[2],a[3],a[4],a[5],a[6], c[2],c[1],8,9,10,11,12,13,14,15)
     poke(0x5f60, a[1],a[2],a[3],a[7],a[5],a[6], c[3],c[1],8,9,10,11,12,13,14,15)
@@ -207,11 +206,18 @@ function menu_step(i,t,b)
 end
 
 function init_menu()
-    menuitem(1,"act "..(DEBUG_ACT or "auto"),function()
-        DEBUG_ACT = (DEBUG_ACT or 0) + 1
-        if (DEBUG_ACT > #ACT_CONFIGS) DEBUG_ACT = nil
-        p:configure(ACT_CONFIGS[mid(1,DEBUG_ACT or gm.level_index,#ACT_CONFIGS)])
-        p:start_match()
+    menuitem(1,"<act "..gm.level_index..">",function(b)
+        gm.level_index = menu_step(gm.level_index,gm.levels,b)
+        cd_save_checkpoint(gm.level_index-1)
+        cli.s = nil
+        cli.cb = nil
+        timers = {}
+        gm.resolving = false
+        gm.booting = false
+        nament.active = false
+        tb:clear()
+        gm:change_state(game_manager.states.level)
+        gm.level:load()
         init_menu()
         return true
     end)
@@ -457,7 +463,7 @@ end
 
 function level:load()
     self.stage:reset()
-    self.pong:configure(ACT_CONFIGS[mid(1,DEBUG_ACT or gm.level_index,#ACT_CONFIGS)])
+    self.pong:configure(ACT_CONFIGS[mid(1,gm.level_index,#ACT_CONFIGS)])
     self.pong:start_match()
 
     self.pong:set_attract(false)
@@ -490,7 +496,6 @@ function _init()
 	tb = term:new(0,96)
     p = pong:new()
     p:reset_game()
-    init_menu()
 	gm:add_level(level:new(stages[1],tb,p))
 	gm:add_level(level:new(stages[2],tb,p))
 	gm:add_level(level:new(stages[3],tb,p))
@@ -500,6 +505,7 @@ function _init()
     local cp = cd_checkpoint()
     if (cp >= 5) cp = 0
     gm.level_index = mid(1, cp+1, #gm.levels)
+    init_menu()
 
     gm.booting = true
     cli_run(CLI_BOOT, function()
