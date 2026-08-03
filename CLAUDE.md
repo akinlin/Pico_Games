@@ -77,6 +77,24 @@ Work on a copy in the scratchpad, never the real cart. `_draw()` is not called, 
 visual can be checked this way — how the game *feels* still needs a human, and that is
 most of what matters.
 
+**The harness copy must override `CD_ID`.** `cartdata` is keyed by name, not by cart file,
+so a scratchpad copy writes to the *same* save file as the real cart. A harness that calls
+`cd_save_name()` or completes an act leaves a checkpoint and a name behind, and the next
+run of either cart resumes from it. In M11a this produced two phantom failures — `_init()`
+resumed at act 2 so stage 1 never reset, and `cd_name()` returned a leftover `aab` — and
+both looked like cart bugs. Rewrite the line to a throwaway id when building the copy:
+
+```python
+s = s.replace('CD_ID = "metapong_1972_1"', 'CD_ID = "metapong_harness"', 1)
+```
+
+Delete `%APPDATA%/pico-8/cdata/<id>.p8d.txt` before each run to guarantee a clean boot.
+
+**`pico8 -x` does not always exit on this host.** It prints `RUNNING:` and the `printh`
+output, then hangs rather than returning. Run it backgrounded with the output redirected to
+a log, sleep ~10s, read the log, and kill leftover `pico8` processes afterwards — do not
+wait on the process itself.
+
 **Debugging.** `printh()` writes to the host console and is the only real logging
 channel. The existing cart has a `draw_debug()` for collision-point visualization —
 keep that pattern, keep it behind a flag, and strip it before a milestone closes so it
@@ -84,6 +102,20 @@ doesn't eat the character budget.
 
 **Commits.** One milestone per branch, conventional-commit style subject lines,
 reference the issue number. Do not push or open PRs without being asked.
+
+**Always branch from an up-to-date default branch.** The remote is `pico`
+(`github.com/akinlin/Pico_Games`) and the default branch is **`master`** — there is no
+`main`. Before writing any code:
+
+```bash
+git fetch pico && git checkout master && git merge --ff-only pico/master
+```
+
+Then branch. The local checkout has been found several commits behind `pico/master` at the
+start of a session, and the working tree looked clean, so nothing signalled it. In M11a
+this meant a full pass was written against a base that predated M11 and had to be redone —
+M11 had already changed the very code being edited. `git log --oneline master..pico/master`
+is the one-line check; run it before trusting a clean `git status`.
 
 ---
 

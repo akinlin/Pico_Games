@@ -8,6 +8,16 @@ PLAYFIELD_BOTTOM = 95
 BALL_SPEEDS = {0.341, 0.683, 1.024}
 BALL_HITS_MAX = 12
 BALL_VZONES = {-1.171,-0.780,-0.390,0,0,0.390,0.780,1.171}
+ball_scale = 1.4
+
+function bspd(t)
+    return BALL_SPEEDS[t] * ball_scale
+end
+
+function bvz(z)
+    return BALL_VZONES[z] * ball_scale
+end
+
 BALL_ZONE_SIZE = 0.75
 SERVE_DELAY = 102
 SERVE_X = 66
@@ -92,10 +102,15 @@ C_TRAIL1 = 4
 C_TRAIL2 = 5
 
 DEBUG_ACT = nil
+DEBUG_AI = true
 
 SCORE_Y = 8
 SCORE_H = 12
 BADGE_Y = 2
+NICK_Y = 1
+NICK_X1 = 8
+NICK_X2 = 108
+COM_NAME = "com"
 
 ACT_PALETTES = {
  {0,7,7,7,    6,5,    6},
@@ -106,12 +121,12 @@ ACT_PALETTES = {
 }
 
 ACT_CONFIGS = {
- {palette=1, phosphor_mode=2},
- {palette=2, phosphor_mode=2},
- {palette=3, phosphor_mode=2},
- {palette=4, phosphor_mode=2},
- {palette=5, phosphor_mode=2},
- {palette=1, phosphor_mode=0, ball_count=40, speed_tier_pin=3, ai_enabled=true}
+ {palette=1, phosphor_mode=true},
+ {palette=2, phosphor_mode=true, nickname="dum"},
+ {palette=3, phosphor_mode=true, nickname="skr"},
+ {palette=4, phosphor_mode=true, nickname="whr"},
+ {palette=5, phosphor_mode=true, nickname="plr"},
+ {palette=1, phosphor_mode=false, ball_count=40, speed_tier_pin=3, ai_enabled=true}
 }
 
 
@@ -119,7 +134,7 @@ ACT_CONFIGS = {
 SCAN_PATTERN = {0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01}
 
 CRAWL_RATE = 12
-crt = {phase=0, st=0, ty=999, tw=240, phos=2, tlen=2, cpu=false}
+crt = {phase=0, st=0, ty=999, tw=240, phos=true, cpu=false}
 
 function set_palette(n)
     local a = ACT_PALETTES[mid(1,DEBUG_ACT or n,#ACT_PALETTES)]
@@ -130,7 +145,7 @@ end
 function set_scanlines()
     local p = SCAN_PATTERN[(crt.phase % 8) + 1]
     memset(0x5f70, 0, 12)
-    for y=BADGE_Y,SCORE_Y+SCORE_H-1 do
+    for y=NICK_Y,SCORE_Y+SCORE_H-1 do
         local i = 0x5f70 + flr(y/8)
         poke(i, peek(i) | (p & (1 << (y%8))))
     end
@@ -142,9 +157,36 @@ function init_crt()
     set_scanlines()
 end
 
-PHOS_NAMES = {"off","ball","full"}
 RESET_LABELS = {"reset data","reset: sure?","reset: done"}
 reset_state = 0
+
+ACCELS = {0.1,0.15,0.2,0.25,0.3,0.4,0.5,0.6,0.8,1}
+MAXSPDS = {1.5,2,2.5,3,3.5,4,4.5,5,6,7}
+accel_i = 5
+maxspd_i = 4
+BALL_CAL = 1.4
+
+function pd_k()
+    return ball_scale / BALL_CAL
+end
+
+function pd_max()
+    return MAXSPDS[maxspd_i] * pd_k()
+end
+
+function pd_accel()
+    return ACCELS[accel_i] * pd_k()
+end
+
+function r2(x)
+    return flr(x*100)/100
+end
+
+function menu_step(i,t,b)
+    if (b&1 > 0) i -= 1
+    if (b&2 > 0) i += 1
+    return mid(1,i,#t)
+end
 
 function init_menu()
     menuitem(1,"act "..(DEBUG_ACT or "auto"),function()
@@ -167,18 +209,19 @@ function init_menu()
         init_menu()
         return true
     end)
-    menuitem(3,"phosphor "..PHOS_NAMES[crt.phos+1],function()
-        crt.phos = (crt.phos + 1) % 3
-        init_menu()
-        return true
-    end)
-    menuitem(4,"cpu "..(crt.cpu and "on" or "off"),function()
+    menuitem(3,"cpu "..(crt.cpu and "on" or "off"),function()
         crt.cpu = not crt.cpu
         init_menu()
         return true
     end)
-    menuitem(5,"result: win/<lose",function(b)
-        p.winner = (b&1>0) and 1 or 2
+    menuitem(4,"<accel "..ACCELS[accel_i]..">",function(b)
+        accel_i = menu_step(accel_i,ACCELS,b)
+        init_menu()
+        return true
+    end)
+    menuitem(5,"<max spd "..MAXSPDS[maxspd_i]..">",function(b)
+        maxspd_i = menu_step(maxspd_i,MAXSPDS,b)
+        init_menu()
         return true
     end)
 end
@@ -186,7 +229,7 @@ end
 TEAR_H = 6
 
 function scan_row(y)
-    return (y >= BADGE_Y and y < SCORE_Y+SCORE_H) or y > PLAYFIELD_BOTTOM
+    return (y >= NICK_Y and y < SCORE_Y+SCORE_H) or y > PLAYFIELD_BOTTOM
 end
 
 function update_crt()
@@ -353,7 +396,7 @@ function game_manager:draw()
             pong.draw_balls()
             local n = cd_name()
             if n then
-                local t = "highscore:"
+                local t = "highscore"
                 local tx = 64 - (#t*2)
                 rectfill(tx-2,BADGE_Y-1,tx+(#t*4),BADGE_Y+13,C_BG)
                 print(t,tx,BADGE_Y,C_SCORE)
@@ -414,8 +457,11 @@ function _init()
     gm.screenheight = 128
     cd_init()
     init_crt()
+    palt(0,false)
+    memset(0x0000,0,0x2000)
     poke(0x5f5c, BTNP_DELAY)
     poke(0x5f5d, BTNP_RATE)
+    if (DEBUG_KEYS) poke(0x5f2d,1)
 	tb = textbox:new(0,96,127,31,C_BG)
     p = pong:new()
     p:reset_game()
@@ -434,6 +480,21 @@ end
 function _update60()
 	gm:update()
     update_crt()
+    update_debug_keys()
+end
+
+DEBUG_KEYS = true
+
+function update_debug_keys()
+    if (not DEBUG_KEYS) return
+    local k = stat(31)
+    if (k == "") return
+    if gm.state == game_manager.states.level and not nament.active then
+        if (k == "c") p.winner = 2
+        if (k == "v") p.winner = 1
+    end
+    if (k == "[") ball_scale = max(0.5, ball_scale - 0.1)
+    if (k == "]") ball_scale = min(3, ball_scale + 0.1)
 end
 
 function update_input()
@@ -451,7 +512,7 @@ function update_input()
 end
 
 function _draw()
-    if crt.phos == 2 then
+    if crt.phos then
         pal(1,C_TRAIL1) pal(2,C_TRAIL1) pal(3,C_TRAIL1)
         pal(C_TRAIL1,C_TRAIL2) pal(C_TRAIL2,C_BG)
         sspr(0,0,128,128,0,0)
@@ -464,16 +525,22 @@ function _draw()
     gm:draw()
     apply_tear()
 
-    if (crt.phos == 2) memcpy(0x0000,0x6000,0x2000)
-    if (crt.cpu) print(flr(stat(1)*100).."%",1,1,C_SCORE)
+    if (crt.phos) memcpy(0x0000,0x6000,0x2000)
+    if crt.cpu then
+        local s = flr(stat(1)*100).."% b"..ball_scale.." p"..r2(pd_max()).."/"..r2(pd_accel())
+        rectfill(0,0,#s*4,6,C_BG)
+        print(s,1,1,C_SCORE)
+    end
 end
 
 function draw_score()
-
-
-
     print("\^w\^t" .. hud.p1_score,hud.p1_x-(#tostr(hud.p1_score)*8),hud.p1_y,hud.p1_color)
     print("\^w\^t" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
+
+    if hud.nick and gm.state == game_manager.states.level then
+        print(COM_NAME,NICK_X1,NICK_Y,hud.p1_color)
+        print(hud.nick,NICK_X2,NICK_Y,hud.p2_color)
+    end
 end
 
 function draw_debug()
@@ -501,8 +568,8 @@ AI_TIE_TIER = 9
 
 DEFAULT_CFG = {
  paddle_height={6,6},
- paddle_accel={0.08,0.4},
- paddle_max_speed={2.5,4.5},
+ paddle_accel={0.08,0.3},
+ paddle_max_speed={2.5,3},
  ball_count=1,
  ball_mode="replica",
  ball_mode_pool=nil,
@@ -518,7 +585,7 @@ DEFAULT_CFG = {
  ai_mode="self_balancing",
  ai_tier=AI_TIE_TIER,
  palette=1,
- phosphor_mode=1,
+ phosphor_mode=true,
  nickname=nil
 }
 
@@ -537,6 +604,7 @@ function pong:configure(cfg)
     if cfg then
         for k,v in pairs(cfg) do c[k] = v end
     end
+    if (DEBUG_AI) c.ai_enabled = true
     self.cfg = c
     self.com_handicap = c.initial_score_com
     self.winner = 0
@@ -621,6 +689,7 @@ function pong:init_hud()
         p2_x = 87,
         p2_y = 8,
         p2_color = C_SCORE,
+        nick = self.cfg.nickname and (cd_name() or self.cfg.nickname)
     }
 end
 
@@ -650,7 +719,10 @@ function pong:move_paddle(p,d)
     else
         if (p.dir != d) p.v = 0
         p.dir = d
-        p.v = min(p.v + self.cfg.paddle_accel[p.side], self.cfg.paddle_max_speed[p.side])
+        local s,k = p.side,pd_k()
+        local ac = (s == 2 and ACCELS[accel_i] or self.cfg.paddle_accel[s]) * k
+        local mx = (s == 2 and MAXSPDS[maxspd_i] or self.cfg.paddle_max_speed[s]) * k
+        p.v = min(p.v + ac, mx)
         p.y += p.v * d
     end
     p.y = mid(p.miny, p.y, p.maxy)
@@ -673,15 +745,8 @@ function pong:add_ball()
         hits = 0,
         serving = 0,
         mode = self.cfg.ball_mode,
-        tc = 0,
-        t1x = SERVE_X,
-        t1y = 0,
-        t2x = SERVE_X,
-        t2y = 0,
-        t3x = SERVE_X,
-        t3y = 0,
-        dx = BALL_SPEEDS[1] * coin_flip(),
-        dy = BALL_VZONES[8] * coin_flip()
+        dx = bspd(1) * coin_flip(),
+        dy = bvz(8) * coin_flip()
     }
     add(balls, b)
     return b
@@ -801,9 +866,9 @@ function pong:update_serve(b)
         b.mode = pool and pool[flr(rnd(#pool))+1] or self.cfg.ball_mode
         b.x = SERVE_X
         if (b.dx < 0) then
-            b.dx = -BALL_SPEEDS[1]
+            b.dx = -bspd(1)
         else
-            b.dx = BALL_SPEEDS[1]
+            b.dx = bspd(1)
         end
     end
 end
@@ -836,7 +901,8 @@ end
 function pong:update_ball(b)
     if b.mode == "homing" and b.dx > 0 then
         local t = player2.y + player2.height/2
-        b.dy = mid(-BALL_VZONES[8], b.dy + mid(-0.02,(t-b.y)*0.01,0.02), BALL_VZONES[8])
+        local m = bvz(8)
+        b.dy = mid(-m, b.dy + mid(-0.02,(t-b.y)*0.01,0.02), m)
     end
     local nx,ny = b.dx,b.dy
     local bx,by,r = b.x,b.y,b.radius
@@ -880,9 +946,9 @@ function pong:update_ball(b)
         if (b.hits < BALL_HITS_MAX) then b.hits += 1 end
         local ti = self:speed_tier(b.hits)
         if (b.mode == "slow_fast") ti = ndx > 0 and 1 or 3
-        local spd = BALL_SPEEDS[ti]
+        local spd = bspd(ti)
         if (ndx < 0) then ndx = -spd else ndx = spd end
-        ndy = BALL_VZONES[pong.contact_zone(pt.y, hitwall.y)]
+        ndy = bvz(pong.contact_zone(pt.y, hitwall.y))
         if (self.cfg.scoring_model == "intercept" and hitwall == player2) self.pending = b
         self:snd(SND_HIT)
         player1.collsionpt = nil
@@ -893,16 +959,6 @@ function pong:update_ball(b)
     b.y = py
     b.dx = ndx
     b.dy = ndy
-
-    if crt.phos == 1 then
-        b.tc += 1
-        if b.tc >= 3 then
-            b.tc = 0
-            b.t3x,b.t3y = b.t2x,b.t2y
-            b.t2x,b.t2y = b.t1x,b.t1y
-            b.t1x,b.t1y = px,py
-        end
-    end
 end
 
 function pong.ball_intercept(ball, paddle, nx, ny)
@@ -1029,16 +1085,6 @@ function pong.draw_balls()
         local b = balls[i]
         if (b.serving <= 0) then
             local r = b.radius
-            local bx0,by0 = flr(b.x),flr(b.y)
-            if crt.phos == 1 and
-                abs(flr(b.t2x)-bx0) + abs(flr(b.t2y)-by0) >= 2 then
-                if crt.tlen > 1 then
-                    local x2,y2 = flr(b.t3x)-r,flr(b.t3y)-r
-                    rectfill(x2,y2,x2+r+r-1,y2+r+r-1,C_TRAIL2)
-                end
-                local x1,y1 = flr(b.t2x)-r,flr(b.t2y)-r
-                rectfill(x1,y1,x1+r+r-1,y1+r+r-1,C_TRAIL1)
-            end
             local bx,by = flr(b.x)-r,flr(b.y)-r
             rectfill(bx,by,bx+r+r-1,by+r+r-1,b.color)
         end
@@ -1310,17 +1356,17 @@ denial:section({
 	line("a little trickier than I thought",T_MED),
 	line("i will shut up now so we can play",T_MED)
 })
-denial.win_section = denial:branch({
+denial.lose_section = denial:branch({
 	line("see, just as i said",T_MED),
 	line("i am good at this game",T_MED)
 })
-denial.lose_section = denial:branch({
+denial.win_section = denial:branch({
 	line("hmm, i lost",T_MED),
 	line("thats not possible",T_MED)
 })
 
 function denial:init()
-	self.armed = false
+	self.armed = DEBUG_AI
 end
 
 function denial:machine()
@@ -1342,8 +1388,8 @@ for i=2,5 do
 		end
 		st:section(ls)
 	end
-	st.win_section = st:branch({line("act "..i.." win",T_MED)})
-	st.lose_section = st:branch({line("act "..i.." lose",T_MED)})
+	st.win_section = st:branch({line("act "..i.." you win",T_MED)})
+	st.lose_section = st:branch({line("act "..i.." you lose",T_MED)})
 end
 
 __gfx__
