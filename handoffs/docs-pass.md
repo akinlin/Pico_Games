@@ -186,13 +186,22 @@ accepted and discarded — dead parameters, never a source of truth. The old lay
 lines at y=98/104/110/116, occupying rows 98–120 and leaving **rows 121–127 unused**. Now
 five lines at y=97/103/109/115/121, ending at row 125. Columns unchanged at 31 from x=2.
 
-**21. Tech Design — new palette role `C_CLI` (6), and `ACT_PALETTES` rows grew to 9
-entries.** Entries 8 and 9 are the console color and its darkened scanline counterpart. A
-**sixth row** was added for attract (`PAL_ATTRACT`), identical to Denial's playfield but
-with the console entry green — attract and Denial previously shared palette 1, so the
-console could not be green at attract and act-colored in Denial without splitting them.
-Inside an act, entries 8/9 equal entries 4/7, which is what makes the console inherit the
-act's text color mechanically rather than by a branch.
+**21. Tech Design — the console has its own palette table.** `ACT_PALETTES` (the game
+surface) and `CLI_PALETTES` (the console surface) are two tables sharing one index, so the
+band's background and text are controllable independently of the act. `CLI_PALETTES` rows
+are `{bg, text, text_dark}`; the console background does **not** darken under scanlines,
+matching how the screen background behaves. Roles are `C_CLI` (6) for console text and
+`C_CLIBG` (7) for the band background.
+
+A **sixth row** exists in both tables for attract (`PAL_ATTRACT`) — attract and Denial
+previously shared palette 1, so the console could not be green at attract and white in
+Denial without splitting them. **Attract is the only place the two surfaces disagree
+today:** console background `2` (dark purple) against a screen background of `0`, with
+green text. Every act sets its console background equal to its screen background, so the
+band is invisible there — that is deliberate placeholder state, not a finished choice.
+
+Inside an act the console text color equals the act's score color, which is what makes the
+console inherit COM's palette mechanically rather than by a branch.
 
 **22. Tech Design — new roles must be added to the phosphor funnel.** `_draw()` maps roles
 1/2/3 → `trail1` → `trail2` → background. **Anything outside that set maps to itself and
@@ -203,6 +212,28 @@ the set and the restore. Any future role has to be, too — this is a trap, not 
 `pong:configure`, defaulting to `TB_REVEAL` (2 frames/char, ~30 cps). **The axis exists and
 every act currently uses the default.** Per-act values are deliberately unset: reveal speed
 is characterisation and cannot be tuned without the written dialogue. M12–M16 own it.
+
+**25. A blank line separates the two voices.** `term:say()` pushes an empty row whenever the
+voice changes and the band already has content, so console output and COM's speech read as
+distinct blocks rather than one stream. Costs one of the five rows whenever both voices are
+on screen — accepted deliberately for the visual separation.
+
+**26. Game Design — the completion beat runs through the console.** After the player
+confirms their nickname the band **clears**, the console prints `congrats <nickname>`, then
+`> run attract` types, then attract loads. It runs in Acceptance's palette, since the
+transition happens before the revert — same rule as any other stage ending. `congrats` is
+console *output* and carries no `>`, following the boot header rather than the command
+lines. **Both the wording and that prefix choice are placeholders for the author.**
+
+**27. Tech Design — the band background costs the dialogue's phosphor trail.** Filling the
+band means the dimmed previous frame is overdrawn there every frame, so text inside it no
+longer glows. Tech Design's phosphor row currently claims `full` makes "everything that
+moves glow, including score digits and dialogue text" — the dialogue-text half is no longer
+true. In practice the loss is small (static text's dimmed copy sits exactly under the bright
+one and was already invisible; only the scroll-up smear and cursor blink trail are gone),
+but the sentence needs correcting. If the glow is wanted back, the fill can be skipped when
+the console background equals the screen background — at the cost of the band behaving
+differently per act.
 
 **24. Tech Design — the palette contrast rule gains a case.** Console green has no darker
 sibling that isn't Bargaining's own background (`ACT_PALETTES[3][1] = 3`). Harmless today,

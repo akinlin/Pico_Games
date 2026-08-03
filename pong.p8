@@ -74,7 +74,11 @@ function nament:update()
     if btnp(5) then
         cd_save_name(self.idx[1], self.idx[2], self.idx[3])
         self.active = false
-        gm:to_attract()
+        tb:clear()
+        cli_run({
+            {"congrats "..cd_name(),false,45},
+            {"> run attract",false,30}
+        }, function() gm:to_attract() end)
     end
 end
 
@@ -101,6 +105,7 @@ C_SCORE = 3
 C_TRAIL1 = 4
 C_TRAIL2 = 5
 C_CLI = 6
+C_CLIBG = 7
 
 DEBUG_ACT = nil
 DEBUG_AI = true
@@ -114,12 +119,21 @@ NICK_X2 = 108
 COM_NAME = "com"
 
 ACT_PALETTES = {
- {0,7,7,7,    6,5,    6,   7,6},
- {8,9,7,10,   15,9,   9,   10,9},
- {3,10,7,11,  6,11,   1,   11,1},
- {1,5,7,12,   12,13,  13,  12,13},
- {5,6,7,9,    6,5,    4,   9,4},
- {0,7,7,7,    6,5,    6,   11,3}
+ {0,7,7,7,    6,5,    6},
+ {8,9,7,10,   15,9,   9},
+ {3,10,7,11,  6,11,   1},
+ {1,5,7,12,   12,13,  13},
+ {5,6,7,9,    6,5,    4},
+ {0,7,7,7,    6,5,    6}
+}
+
+CLI_PALETTES = {
+ {0,7,6},
+ {8,10,9},
+ {3,11,1},
+ {1,12,13},
+ {5,9,4},
+ {2,11,3}
 }
 PAL_ATTRACT = 6
 
@@ -140,9 +154,10 @@ CRAWL_RATE = 12
 crt = {phase=0, st=0, ty=999, tw=240, phos=true, cpu=false}
 
 function set_palette(n)
-    local a = ACT_PALETTES[mid(1,DEBUG_ACT or n,#ACT_PALETTES)]
-    poke(0x5f10, a[1],a[2],a[3],a[4],a[5],a[6], a[8],7,8,9,10,11,12,13,14,15)
-    poke(0x5f60, a[1],a[2],a[3],a[7],a[5],a[6], a[9],7,8,9,10,11,12,13,14,15)
+    local i = mid(1,DEBUG_ACT or n,#ACT_PALETTES)
+    local a,c = ACT_PALETTES[i], CLI_PALETTES[i]
+    poke(0x5f10, a[1],a[2],a[3],a[4],a[5],a[6], c[2],c[1],8,9,10,11,12,13,14,15)
+    poke(0x5f60, a[1],a[2],a[3],a[7],a[5],a[6], c[3],c[1],8,9,10,11,12,13,14,15)
 end
 
 function set_scanlines()
@@ -1157,7 +1172,9 @@ end
 
 function term:say(s,v,ins)
 	if (self.cur != "") self:push(self.cur,self.v)
-	self.v = v or V_COM
+	v = v or V_COM
+	if (#self.rows > 0 and v != self.v) self:push("",self.v)
+	self.v = v
 	self.queue = self:wrap(s)
 	self:next_row()
 	if ins then
@@ -1222,6 +1239,7 @@ function term:update()
 end
 
 function term:draw()
+	rectfill(self.x,self.y,127,127,C_CLIBG)
 	local y = self.y + 1
 	for i=1,#self.rows do
 		print(self.rows[i], self.x+2, y, V_COL[self.vo[i]])
