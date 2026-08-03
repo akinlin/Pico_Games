@@ -383,6 +383,26 @@ mouse.
 
 ---
 
+## M11b — The CLI as story element — #24
+
+**Spec:** `handoffs/docs-pass.md` items 14–24 (the design session's output; not yet in the
+design docs, which are frozen).
+
+The terminal stops being a plain dialogue window and becomes the host machine's console,
+with the Pong cart as a program running on it. Two voices share the band — `console`
+(`>` prefix, green at attract, act-colored inside a stage) and `com` (unprefixed). Cold
+boot types itself in; a stage ending hands the machine back to the console.
+
+**Acceptance**
+
+- Cold boot shows an empty playfield until `> run` finishes, then attract appears.
+- Console text is green at attract and the act's text color when a stage is live.
+- The band clears once per loop, at stage end — never between Sections.
+- Console text fades under phosphor rather than burning in.
+- Reveal rate is a per-act axis; every act still uses the default, by design.
+
+---
+
 ## M12–M16 — The five acts as configuration
 
 Each act is a config plus a `stage` state machine. Build in story order; the Intro is

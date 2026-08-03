@@ -65,10 +65,8 @@ in Anger, it needs another carrier** — this is a live design question, not jus
 **3. Parking Lot additions:**
 - Explore `paddle_accel` / `paddle_max_speed` as expressive *per-situation* settings rather
   than fixed per-act values. Changing paddle response mid-act felt good in playtest.
-- Surface the "press any button to start" prompt through the CLI terminal band rather than
-  as text over the playfield. Attract should read as an unattended machine with nothing
-  overlaying the field, but the affordance still needs to exist somewhere. *(See also the
-  CLI handoff — this overlaps.)*
+- ~~Surface the "press any button to start" prompt through the CLI terminal band rather than
+  as text over the playfield.~~ **Built in M11b — see item 18. Do not add to the Parking Lot.**
 - CRT treatment as a player-facing option rather than always-on. Already added to the
   Parking Lot in M7a; verify it survived.
 
@@ -127,6 +125,91 @@ the **player**. COM stays at 0.08 / 2.5 — the values it was actually playteste
 `ai_levels` difficulty curve. Flag as an open item rather than documenting 0.08/2.5 as
 intentional.
 
+### CLI / terminal — decided and built in M11b
+
+The terminal design session (2026-08-03) settled what the band *is* in fiction and rebuilt
+it against that. Branch `m11b-cli-console`. **These items amend earlier entries in this
+backlog — read them together with #4 and #3.**
+
+**14. The terminal is the host machine's console, not part of Pong.** The player boots into
+a fictional machine's PICO-8 console; the Pong cart is a program running on it. This is the
+governing decision and everything below follows from it. Game Design's *Dialogue System*
+section (currently "a CLI/terminal-style window… POSIX-style command-window look") needs
+rewriting around it.
+
+**15. Two voices share the band.** `console` (the host machine) and `com`. They differ by
+prefix and color only:
+
+| | `console` | `com` |
+|---|---|---|
+| Prefix | `>` , authored into the line | none |
+| Color | green at attract; the act's text color inside a stage | the act's text color |
+| Speaks | boot, stage end, attract prompt | Denial onward |
+
+Voice is a first-class parameter (`term:say(text, voice, instant)`) and each retained
+scrollback row stores its own, so a third voice is a data change. **Currently only COM
+speaks during an act** — the console is bookends. Keeping mid-act console lines *possible*
+was an explicit requirement.
+
+**16. The boot and transition sequences.** Cold boot, once per cart launch: `pico-8 cli` and
+`(c) lexaloffle games llp` appear instantly (they are output), then `> load pong.p8` and
+`> run` type (they are commands). The playfield appears only after `> run`. Then
+`> press any button`. On press, `> run game` types and the act begins.
+
+At the end of a stage: COM's last line, then the band **clears**, then `> run attract` types
+**while the act's palette is still in force** — COM set it and has stepped away, so the
+console comes back up still wearing his colors. The palette reverts as attract loads.
+
+`run` (bare) is the real PICO-8 command that starts the cart; `run attract` and `run game`
+are the cart's own internal commands. Two nested layers of the same fiction, deliberately
+indistinguishable to the player. The boot header omits a version number on purpose, so the
+cart doesn't date itself against future PICO-8 releases.
+
+**17. Amends #4 — scrollback clears exactly once.** #4 says scrollback "is now continuous
+and never clears." Correct as far as it went, but the clear now has one trigger: **stage
+end**, immediately before `> run attract`. Not between Sections, and not on entering
+attract — so `> press any button` and `> run game` persist into the act and are pushed out
+by COM's dialogue rather than wiped.
+
+**18. Amends #3 — the attract prompt Parking Lot item is done.** "Surface the *press any
+button* prompt through the CLI terminal band" is implemented, not parked. Remove it from
+the Parking Lot list rather than adding it.
+
+**19. Tech Design — `textbox` is now `term`.** The state machine (`closed → opening → open
+→ closing`) and the slide motion were already gone; the *Textbox behavior* table still
+documents both and must be rewritten. `open()` and `close()` were dead code and are
+deleted. New surface: `say(text, voice, instant)`, `clear()`, `done()`, and a `rate` field.
+
+**20. Tech Design — band geometry, corrected.** Rows 96–127 inclusive is **32 rows, not
+31**. The `31` came from `textbox:new(0,96,127,31,C_BG)`, whose `w`/`h`/`c` arguments were
+accepted and discarded — dead parameters, never a source of truth. The old layout drew four
+lines at y=98/104/110/116, occupying rows 98–120 and leaving **rows 121–127 unused**. Now
+five lines at y=97/103/109/115/121, ending at row 125. Columns unchanged at 31 from x=2.
+
+**21. Tech Design — new palette role `C_CLI` (6), and `ACT_PALETTES` rows grew to 9
+entries.** Entries 8 and 9 are the console color and its darkened scanline counterpart. A
+**sixth row** was added for attract (`PAL_ATTRACT`), identical to Denial's playfield but
+with the console entry green — attract and Denial previously shared palette 1, so the
+console could not be green at attract and act-colored in Denial without splitting them.
+Inside an act, entries 8/9 equal entries 4/7, which is what makes the console inherit the
+act's text color mechanically rather than by a branch.
+
+**22. Tech Design — new roles must be added to the phosphor funnel.** `_draw()` maps roles
+1/2/3 → `trail1` → `trail2` → background. **Anything outside that set maps to itself and
+never fades**, leaving a permanent smear on the phosphor buffer. `C_CLI` was added to both
+the set and the restore. Any future role has to be, too — this is a trap, not a detail.
+
+**23. Tech Design — per-act reveal rate axis.** `cli_rate` on the act config, applied in
+`pong:configure`, defaulting to `TB_REVEAL` (2 frames/char, ~30 cps). **The axis exists and
+every act currently uses the default.** Per-act values are deliberately unset: reveal speed
+is characterisation and cannot be tuned without the written dialogue. M12–M16 own it.
+
+**24. Tech Design — the palette contrast rule gains a case.** Console green has no darker
+sibling that isn't Bargaining's own background (`ACT_PALETTES[3][1] = 3`). Harmless today,
+because the console only speaks at attract where the background is black. **It becomes a
+real bug the first time a console line is written into a stage** — which #15 explicitly
+keeps possible. Flag it next to the existing rule.
+
 ### Things to verify rather than assume
 
 - **Stale GitHub issues.** `CLAUDE.md` lists #29, #30, #32, #34 as describing superseded
@@ -137,6 +220,19 @@ intentional.
 - **`ball_mode`.** `slow_fast` and `homing` are minimal working implementations so the axis
   is real rather than a stub. Depression (M15) owns tuning them — check whether M15 changed
   the semantics before documenting them.
+
+- **Does an act *win* route through the console too?** M11b hooked the
+  clear → `> run attract` → `> press any button` → `> run game` sequence to the paths that
+  actually return to attract, which today means **a loss and game completion only**. An act
+  win still calls `level:load()` and goes straight into the next act, per Game Design's
+  "stage ends, transitions to Anger." That was an assumption, not a decision — if each act
+  should read as its own separate `run` of the program, it is a one-line change in
+  `game_manager:resolve()`.
+
+- **The name-entry path skips `> run attract`.** Acceptance win → name entry → `to_attract()`,
+  which prints the prompt but not the `> run attract` line, because the sequence hangs off
+  the resolve branch rather than off `to_attract()` itself. Probably fine — name entry is its
+  own screen — but confirm it reads right once that flow is playable.
 
 ---
 

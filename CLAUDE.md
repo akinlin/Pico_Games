@@ -20,8 +20,9 @@ The design lives in the GitHub wiki, mirrored into this repo:
 - `docs/BUILD-PLAN.md` — ordered milestones and their acceptance criteria.
 
 `handoffs/` holds self-contained briefs for work that runs in its own session:
-`acts-m12-m16.md` (the next build session), `docs-pass.md` (the end-of-Alpha
-documentation pass), `cli-design.md` (the terminal design session). Each stands alone.
+`acts-m12-m16.md` (the next build session) and `docs-pass.md` (the end-of-Alpha
+documentation pass). Each stands alone. The terminal design session ran on 2026-08-03;
+its decisions live in `docs-pass.md` items 14–24.
 
 Rules that matter:
 
