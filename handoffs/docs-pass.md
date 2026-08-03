@@ -266,8 +266,10 @@ keeps possible. Flag it next to the existing rule.
 - **Stale GitHub issues.** `CLAUDE.md` lists #29, #30, #32, #34 as describing superseded
   behavior. Check whether they should be closed or rewritten now the design is settled.
 - **Dev scaffolding.** The pause menu currently carries an act selector, `reset data`, a
-  phosphor toggle, a CPU readout and a force-result item, plus `DEBUG_ACT`. Decide what
-  ships. The act selector and reset may be worth keeping; force-result certainly isn't.
+  CPU readout and the two paddle-tuning items. Decide what ships. **Updated in M11b:**
+  `DEBUG_ACT` is deleted and the act selector became real navigation (item 28), so it is
+  the strongest keep candidate — but note it now **overwrites the progress checkpoint**,
+  which makes it destructive on a real playthrough. `DEBUG_AI` and `DEBUG_KEYS` remain.
 - **`ball_mode`.** `slow_fast` and `homing` are minimal working implementations so the axis
   is real rather than a stub. Depression (M15) owns tuning them — check whether M15 changed
   the semantics before documenting them.
