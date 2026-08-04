@@ -458,13 +458,17 @@ from commit messages.
 
 ## Open items
 
-Cut from the wiki at the docs pass and **not yet filed as issues** — file them before
-starting M12, or they rot here the way the last backlog did:
+Cut from the wiki at the docs pass and filed as issues, so they don't rot in a table here
+the way the last backlog did:
 
-- Timer calibration — `T_SHORT`/`T_MED`/`T_LONG` are 45/90/180 frames against a ~20 minute
-  clean playthrough target, and have never been tuned against real dialogue.
-- Debug scaffolding strip sweep, including the ship-blocking `poke(0x5f2d, 1)`.
-- `com_serves_every_point` serves toward COM; the design says toward the player.
-- Anger's swarm ball count — 40 is a stress figure, not a design decision.
-- Depression's `ball_mode` tuning: `slow_fast` and `homing` are minimal implementations.
-- Stale issue triage, and the class diagram (#35).
+| Issue | |
+|---|---|
+| [#54](https://github.com/akinlin/Pico_Games/issues/54) | Strip debug scaffolding and dead code before release. **Contains the one ship-blocker**, `poke(0x5f2d, 1)`, and the reason the player's paddle config axes are currently dead |
+| [#55](https://github.com/akinlin/Pico_Games/issues/55) | `com_serves_every_point` serves toward COM, not the player. M14 |
+| [#56](https://github.com/akinlin/Pico_Games/issues/56) | Playtest tuning: dialogue timers, Anger's swarm count, Depression's ball modes, COM's paddle response |
+| [#57](https://github.com/akinlin/Pico_Games/issues/57) | Console band colours inside an act are placeholder |
+| [#58](https://github.com/akinlin/Pico_Games/issues/58) | Parking Lot — design ideas kept but not scheduled |
+| [#59](https://github.com/akinlin/Pico_Games/issues/59) | Triage stale issues against the wiki |
+
+**Read #54 before starting M12** — `DEBUG_AI` bypasses Denial's 2-point arming, which is
+exactly the behavior M12 builds.
