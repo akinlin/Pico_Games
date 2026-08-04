@@ -20,8 +20,9 @@ The design lives in the GitHub wiki, mirrored into this repo:
 - `docs/BUILD-PLAN.md` — ordered milestones and their acceptance criteria.
 
 `handoffs/` holds self-contained briefs for work that runs in its own session:
-`acts-m12-m16.md` (the next build session), `docs-pass.md` (the end-of-Alpha
-documentation pass), `cli-design.md` (the terminal design session). Each stands alone.
+`acts-m12-m16.md` (the next build session) and `docs-pass.md` (the end-of-Alpha
+documentation pass). Each stands alone. The terminal design session ran on 2026-08-03;
+its decisions live in `docs-pass.md` items 14–24.
 
 Rules that matter:
 
@@ -462,6 +463,13 @@ the split.
   an unclamped tier-3 ray gives 122.9 × 330 = 40,551, which **wraps to −24,986** and
   returns a garbage intersection. The clamps therefore stay until M6 reworks `predict()`,
   and the AABB pre-reject is what keeps their cost out of the swarm's inner loop.
+- **A new palette role must be added to the phosphor funnel or it burns in permanently.**
+  `_draw()`'s `full` phosphor path has no `cls()` — the dimmed previous frame *is* the
+  background. It maps roles `1`/`2`/`3` → `C_TRAIL1` → `C_TRAIL2` → `C_BG`, and **anything
+  outside that set maps to itself**, so it never fades and leaves a permanent smear on the
+  stashed frame. Add the role to both the dim mapping and the restore below it. The
+  exception is a role that is fully overdrawn every frame — the console band background is
+  a `rectfill`, so it is deliberately left out.
 - **The score `hud.p1_x` / `p2_x` are field *inner* edges, not left edges.** The left
   score is right-aligned onto its edge so the pair stays symmetric about the net at any
   digit count. `\^p` is *pinball* mode (wide + tall + stripey), so each glyph is **8 px**

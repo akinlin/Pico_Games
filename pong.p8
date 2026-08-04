@@ -74,7 +74,11 @@ function nament:update()
     if btnp(5) then
         cd_save_name(self.idx[1], self.idx[2], self.idx[3])
         self.active = false
-        gm:to_attract()
+        tb:clear()
+        cli_run({
+            {"> congrats "..cd_name(),false,45},
+            {"> run attract",false,30}
+        }, function() gm:to_attract() end)
     end
 end
 
@@ -100,8 +104,9 @@ C_BALL = 2
 C_SCORE = 3
 C_TRAIL1 = 4
 C_TRAIL2 = 5
+C_CLI = 6
+C_CLIBG = 7
 
-DEBUG_ACT = nil
 DEBUG_AI = true
 
 SCORE_Y = 8
@@ -117,8 +122,19 @@ ACT_PALETTES = {
  {8,9,7,10,   15,9,   9},
  {3,10,7,11,  6,11,   1},
  {1,5,7,12,   12,13,  13},
- {5,6,7,9,    6,5,    4}
+ {5,6,7,9,    6,5,    4},
+ {0,7,7,7,    6,5,    6}
 }
+
+CLI_PALETTES = {
+ {0,7,6},
+ {8,10,9},
+ {3,11,1},
+ {1,12,13},
+ {5,9,4},
+ {2,11,3}
+}
+PAL_ATTRACT = 6
 
 ACT_CONFIGS = {
  {palette=1, phosphor_mode=true},
@@ -137,9 +153,10 @@ CRAWL_RATE = 12
 crt = {phase=0, st=0, ty=999, tw=240, phos=true, cpu=false}
 
 function set_palette(n)
-    local a = ACT_PALETTES[mid(1,DEBUG_ACT or n,#ACT_PALETTES)]
-    poke(0x5f10, a[1],a[2],a[3],a[4],a[5],a[6], 6,7,8,9,10,11,12,13,14,15)
-    poke(0x5f60, a[1],a[2],a[3],a[7],a[5],a[6], 6,7,8,9,10,11,12,13,14,15)
+    local i = mid(1,n,#ACT_PALETTES)
+    local a,c = ACT_PALETTES[i], CLI_PALETTES[i]
+    poke(0x5f10, a[1],a[2],a[3],a[4],a[5],a[6], c[2],c[1],8,9,10,11,12,13,14,15)
+    poke(0x5f60, a[1],a[2],a[3],a[7],a[5],a[6], c[3],c[1],8,9,10,11,12,13,14,15)
 end
 
 function set_scanlines()
@@ -189,11 +206,18 @@ function menu_step(i,t,b)
 end
 
 function init_menu()
-    menuitem(1,"act "..(DEBUG_ACT or "auto"),function()
-        DEBUG_ACT = (DEBUG_ACT or 0) + 1
-        if (DEBUG_ACT > #ACT_CONFIGS) DEBUG_ACT = nil
-        p:configure(ACT_CONFIGS[mid(1,DEBUG_ACT or gm.level_index,#ACT_CONFIGS)])
-        p:start_match()
+    menuitem(1,"<act "..gm.level_index..">",function(b)
+        gm.level_index = menu_step(gm.level_index,gm.levels,b)
+        cd_save_checkpoint(gm.level_index-1)
+        cli.s = nil
+        cli.cb = nil
+        timers = {}
+        gm.resolving = false
+        gm.booting = false
+        nament.active = false
+        tb:clear()
+        gm:change_state(game_manager.states.level)
+        gm.level:load()
         init_menu()
         return true
     end)
@@ -328,9 +352,11 @@ function game_manager:start_level()
 	end
 end
 
-function game_manager:update() 
+function game_manager:update()
     update_timers()
 	update_input()
+    tb:update()
+    cli_update()
 
     if nament.active then
         nament:update()
@@ -338,6 +364,7 @@ function game_manager:update()
     end
 
 	if self.state == game_manager.states.level then
+		if (cli_busy()) return
 		self.level:update()
         self:check_result()
     else
@@ -373,35 +400,40 @@ function game_manager:resolve(w)
         end
         self.level:load()
     else
-        self:to_attract()
+        tb:clear()
+        cli_run(CLI_ATTRACT, function() gm:to_attract() end)
     end
 end
 
 function game_manager:to_attract()
     self:change_state(game_manager.states.attract)
     p:configure(ACT_CONFIGS[1])
-    set_palette(1)
+    set_palette(PAL_ATTRACT)
     crt.phos = ACT_CONFIGS[1].phosphor_mode
     timers = {}
     self.input_lock = true
     p:init_balls(p.cfg.ball_count)
     p:set_attract(true)
+    cli_run(CLI_PROMPT)
 end
 
 function game_manager:draw()
-    pong.draw_board()
+    if (not self.booting) pong.draw_board()
 
 	local states = {
 		[game_manager.states.attract] = function()
-            pong.draw_balls()
-            local n = cd_name()
-            if n then
-                local t = "highscore"
-                local tx = 64 - (#t*2)
-                rectfill(tx-2,BADGE_Y-1,tx+(#t*4),BADGE_Y+13,C_BG)
-                print(t,tx,BADGE_Y,C_SCORE)
-                print(n,64-(#n*2),BADGE_Y+7,C_SCORE)
+            if not self.booting then
+                pong.draw_balls()
+                local n = cd_name()
+                if n then
+                    local t = "highscore"
+                    local tx = 64 - (#t*2)
+                    rectfill(tx-2,BADGE_Y-1,tx+(#t*4),BADGE_Y+13,C_BG)
+                    print(t,tx,BADGE_Y,C_SCORE)
+                    print(n,64-(#n*2),BADGE_Y+7,C_SCORE)
+                end
             end
+            tb:draw()
         end,
         [game_manager.states.level] = function()
             self.level:draw()
@@ -431,7 +463,7 @@ end
 
 function level:load()
     self.stage:reset()
-    self.pong:configure(ACT_CONFIGS[mid(1,DEBUG_ACT or gm.level_index,#ACT_CONFIGS)])
+    self.pong:configure(ACT_CONFIGS[mid(1,gm.level_index,#ACT_CONFIGS)])
     self.pong:start_match()
 
     self.pong:set_attract(false)
@@ -441,7 +473,6 @@ function level:input()
 end
 
 function level:update()
-	self.textbox:update()
     self.stage:update(self.textbox)
     if (not gm.resolving) self.pong:update_game_state()
 end
@@ -462,10 +493,9 @@ function _init()
     poke(0x5f5c, BTNP_DELAY)
     poke(0x5f5d, BTNP_RATE)
     if (DEBUG_KEYS) poke(0x5f2d,1)
-	tb = textbox:new(0,96,127,31,C_BG)
+	tb = term:new(0,96)
     p = pong:new()
     p:reset_game()
-    init_menu()
 	gm:add_level(level:new(stages[1],tb,p))
 	gm:add_level(level:new(stages[2],tb,p))
 	gm:add_level(level:new(stages[3],tb,p))
@@ -475,6 +505,13 @@ function _init()
     local cp = cd_checkpoint()
     if (cp >= 5) cp = 0
     gm.level_index = mid(1, cp+1, #gm.levels)
+    init_menu()
+
+    gm.booting = true
+    cli_run(CLI_BOOT, function()
+        gm.booting = false
+        cli_run(CLI_PROMPT)
+    end)
 end
 
 function _update60()
@@ -499,13 +536,14 @@ end
 
 function update_input()
     if (gm.state != game_manager.states.attract) return
+    if (gm.booting or (cli_busy() and cli.s != CLI_PROMPT)) return
     if gm.input_lock then
         if (btn() == 0) gm.input_lock = false
         return
     end
     for i=0,5 do
         if btnp(i) then
-            gm:start_level()
+            cli_run(CLI_START, function() gm:start_level() end)
             return
         end
     end
@@ -513,10 +551,10 @@ end
 
 function _draw()
     if crt.phos then
-        pal(1,C_TRAIL1) pal(2,C_TRAIL1) pal(3,C_TRAIL1)
+        pal(1,C_TRAIL1) pal(2,C_TRAIL1) pal(3,C_TRAIL1) pal(C_CLI,C_TRAIL1)
         pal(C_TRAIL1,C_TRAIL2) pal(C_TRAIL2,C_BG)
         sspr(0,0,128,128,0,0)
-        pal(1,1) pal(2,2) pal(3,3)
+        pal(1,1) pal(2,2) pal(3,3) pal(C_CLI,C_CLI)
         pal(C_TRAIL1,C_TRAIL1) pal(C_TRAIL2,C_TRAIL2)
     else
         cls(C_BG)
@@ -606,6 +644,7 @@ function pong:configure(cfg)
     end
     if (DEBUG_AI) c.ai_enabled = true
     self.cfg = c
+    tb.rate = c.cli_rate or TB_REVEAL
     self.com_handicap = c.initial_score_com
     self.winner = 0
 end
@@ -614,6 +653,7 @@ function pong:reset_game()
     self:start_match()
     self:set_attract(true)
     gm:change_state(game_manager.states.attract)
+    set_palette(PAL_ATTRACT)
 end
 
 function pong:set_attract(on)
@@ -1091,32 +1131,37 @@ function pong.draw_balls()
     end
 end
 -->8
-TB_ROWS = 4
+TB_ROWS = 5
 TB_COLS = 31
 TB_REVEAL = 2
 TB_LH = 6
+V_COM = 1
+V_CLI = 2
+V_COL = {C_SCORE,C_CLI}
 
-textbox = {}
-textbox.__index = textbox
-function textbox:new(xpos,ypos,w,h,c)
+term = {}
+term.__index = term
+function term:new(xpos,ypos)
 	local tb = {
 		x=xpos,
 		y=ypos,
 		rows={},
+		vo={},
 		queue={},
 		src="",
 		cur="",
+		v=V_COM,
 		i=0,
 		t=0,
+		rate=TB_REVEAL,
 		blink=0,
-		pending=nil,
-		last=nil
+		pending=nil
 	}
-	setmetatable(tb,textbox)
+	setmetatable(tb,term)
 	return tb
 end
 
-function textbox:wrap(s)
+function term:wrap(s)
 	local out,line = {},""
 	for w in all(split(s," ",false)) do
 		local t = line == "" and w or line.." "..w
@@ -1131,39 +1176,64 @@ function textbox:wrap(s)
 	return out
 end
 
-function textbox:say(s)
-	if (self.cur != "") self:push(self.cur)
+function term:say(s,v,ins)
+	if (self.cur != "") self:push(self.cur,self.v)
+	v = v or V_COM
+	if (#self.rows > 0 and v != self.v) self:push("",self.v)
+	self.v = v
 	self.queue = self:wrap(s)
 	self:next_row()
+	if ins then
+		self.i = #self.src
+		self.cur = self.src
+		while #self.queue > 0 do
+			self:push(self.cur,self.v)
+			self:next_row()
+			self.i = #self.src
+			self.cur = self.src
+		end
+	end
 end
 
-function textbox:next_row()
+function term:clear()
+	self.rows = {}
+	self.vo = {}
+	self.queue = {}
+	self.src = ""
+	self.cur = ""
+	self.i = 0
+	self.t = 0
+end
+
+function term:next_row()
 	self.src = deli(self.queue,1) or ""
 	self.cur = ""
 	self.i = 0
 	self.t = 0
 end
 
-function textbox:push(row)
+function term:push(row,v)
 	add(self.rows,row)
+	add(self.vo,v)
 	while #self.rows >= TB_ROWS do
 		deli(self.rows,1)
+		deli(self.vo,1)
 	end
 end
 
-function textbox:update()
+function term:update()
 	self.blink = (self.blink + 1) % 30
 
 	if self.i < #self.src then
 		self.t += 1
-		if self.t >= TB_REVEAL then
+		if self.t >= self.rate then
 			self.t = 0
 			self.i += 1
 			self.cur = sub(self.src,1,self.i)
 			snd_type()
 		end
 	elseif #self.queue > 0 then
-		self:push(self.cur)
+		self:push(self.cur,self.v)
 		self:next_row()
 	end
 
@@ -1174,27 +1244,63 @@ function textbox:update()
 	end
 end
 
-function textbox:draw()
-	local y = self.y + 2
+function term:draw()
+	rectfill(self.x,self.y,127,127,C_CLIBG)
+	local y = self.y + 1
 	for i=1,#self.rows do
-		print(self.rows[i], self.x+2, y, C_SCORE)
+		print(self.rows[i], self.x+2, y, V_COL[self.vo[i]])
 		y += TB_LH
 	end
 	local c = self.cur
 	if (self.blink < 15) c = c..chr(16)
-	print(c, self.x+2, y, C_SCORE)
+	print(c, self.x+2, y, V_COL[self.v])
 end
 
-function textbox:done()
+function term:done()
 	return self.i >= #self.src and #self.queue == 0
 end
 
-function textbox:open(cb)
-	self.pending = cb
+CLI_BOOT = {
+	{"pico-8 cli",true},
+	{"(c) lexaloffle games llp",true,30},
+	{"> load pong.p8",false,20},
+	{"> run",false,20}
+}
+CLI_ATTRACT = {{"> run attract",false,30}}
+CLI_PROMPT = {{"> press any button"}}
+CLI_START = {{"> run game",false,15}}
+
+cli = {s=nil,i=0,t=0,cb=nil}
+
+function cli_run(s,cb)
+	cli.s = s
+	cli.i = 0
+	cli.t = 0
+	cli.cb = cb
 end
 
-function textbox:close(cb)
-	self.pending = cb
+function cli_busy()
+	return cli.s != nil
+end
+
+function cli_update()
+	if (not cli.s) return
+	if (not tb:done()) return
+	if cli.t > 0 then
+		cli.t -= 1
+		return
+	end
+	if cli.i >= #cli.s then
+		local c = cli.cb
+		cli.s = nil
+		cli.cb = nil
+		if (c) c()
+		return
+	end
+	cli.i += 1
+	local e = cli.s[cli.i]
+	tb:say(e[1],V_CLI,e[2])
+	cli.t = e[3] or 0
 end
 
 -->8
