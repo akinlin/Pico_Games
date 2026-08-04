@@ -6,25 +6,32 @@ machine introduces itself: COM, an AI that has always been in the circuitry. Acr
 five acts COM moves through the five stages of grief, and the gameplay rules change
 with him.
 
-The cart is `pong.p8` at repo root. There is a second unrelated cart, `possesor.p8` —
-do not touch it.
+Everything for this game lives in `meta_pong/`: the cart is `meta_pong/meta_pong.p8`,
+alongside this file and `DEVLOG.md`. Paths here are written from the **repository root**,
+which is the working directory. There is a second unrelated cart,
+`possessor/possessor.p8` — do not touch it.
+
+The repository holds several carts. Its layout, the branch-per-cart working model and
+the rules for shared code in `libs/` are in the [root README](../README.md) and
+[`docs/`](../docs/); there is no `CLAUDE.md` above this one.
 
 ---
 
 ## Source of truth
 
-**There are no design documents in this repo.** Two places hold everything:
+**There are no Meta Pong design documents in this repo** — `docs/` is repository-wide and
+carries none. Two places hold everything:
 
 - **[The wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong)** — one page, three
   sections: **Game Design**, **Tech Design**, **Reference Materials**. **Authoritative.**
 - **[GitHub issues](https://github.com/akinlin/Pico_Games/issues)** — all work and all
   status. Each milestone is an issue; M12–M16 are #60–#64.
 
-This file and `DEVLOG.md` are the only prose left in the repo, and neither is a spec. The
-wiki mirrors, the build plan and the session handoffs were **deleted at the end-of-Alpha
-docs pass, 2026-08-03** — mirrors drifted, and the plan's finished milestones were history
-that `DEVLOG.md` already tells better. Read the wiki. It is a git repo if you need one
-locally:
+This file and `DEVLOG.md` are the only Meta Pong prose in the repo, and neither is a spec.
+The wiki mirrors, the build plan and the session handoffs were **deleted at the
+end-of-Alpha docs pass, 2026-08-03** — mirrors drifted, and the plan's finished milestones
+were history that `DEVLOG.md` already tells better. Read the wiki. It is a git repo if you
+need one locally:
 
 ```bash
 git clone https://github.com/akinlin/Pico_Games.wiki.git
@@ -59,8 +66,8 @@ back. Therefore:
 
 **You can check that it parses.** PICO-8 0.2.7 is installed at
 `C:\Program Files (x86)\PICO-8\pico8.exe` (not on `PATH`). Running it with
-`-x pong.p8` loads the cart headlessly, executes the top-level chunk, prints
-`RUNNING: pong.p8` and exits 0 — a syntax error or a load-time runtime error surfaces
+`-x meta_pong/meta_pong.p8` loads the cart headlessly, executes the top-level chunk, prints
+`RUNNING: meta_pong.p8` and exits 0 — a syntax error or a load-time runtime error surfaces
 there instead of on the user's next launch. Do this after every edit to the cart, before
 writing the verify block. It does **not** run `_update60` or `_draw`, so it proves
 nothing behavioral: report it as "parses and loads clean," never as "works."
@@ -125,22 +132,25 @@ channel. Keep debug output behind a flag, and strip it before a milestone closes
 doesn't eat the character budget. (`draw_debug()` is the surviving example and is now
 dead code — see issue #54.)
 
-**The milestone loop.** Branch → read the issue and the wiki sections it names, *before*
+**The milestone loop.** Sync → read the issue and the wiki sections it names, *before*
 writing code → implement → hand over a verify block → the user launches the cart and
 reports back → iterate → strip debug scaffolding → commit → update or close the issue.
 **Each milestone is a GitHub issue**; there is no plan file. M12–M16 are #60–#64.
 
-**Git workflow.** One milestone per branch, conventional-commit style subject lines,
-reference the issue number. The four steps, in order:
+**Git workflow.** Conventional-commit style subject lines, reference the issue number.
+The repository uses a **branch per cart** — all Meta Pong work happens on the
+`meta_pong` branch, which lands on `main` through a pull request. Milestones are commits
+on that branch, not branches of their own. The four steps, in order:
 
 1. **Sync first.** The remote is `pico` (`github.com/akinlin/Pico_Games`) and the default
-   branch is **`master`** — there is no `main`.
+   branch is **`main`** — renamed from `master` on 2026-08-03.
 
    ```bash
-   git fetch pico && git checkout master && git merge --ff-only pico/master
+   git fetch pico && git checkout main && git merge --ff-only pico/main
+   git checkout meta_pong && git merge main
    ```
 
-2. **Branch** off that, and do the work there. Never commit to `master`.
+2. **Work on `meta_pong`.** Never commit to `main`.
 3. **Commit locally as progress is made** — don't save everything for one commit at the
    end. Local commits are free and need no permission.
 4. **Ask before pushing.** When the work reaches a point worth publishing, say so and
@@ -155,10 +165,10 @@ the whole history in one place.
 offer to. Stop at the pushed branch and hand back.
 
 **Why step 1 has its own rule:** the local checkout has been found several commits behind
-`pico/master` at the start of a session with a clean working tree, so nothing signalled it.
+the remote at the start of a session with a clean working tree, so nothing signalled it.
 In M11a a full pass was written against a base that predated M11 and had to be redone from
 scratch — M11 had already rewritten the very code being edited. `git log --oneline
-master..pico/master` is the one-line check; run it before trusting a clean `git status`.
+main..pico/main` is the one-line check; run it before trusting a clean `git status`.
 
 ---
 
@@ -207,7 +217,7 @@ figure the manual states.
 manual's *Code Limits* excludes them, along with commas, periods, `local`s, semicolons
 and `end`s — but they count in full against the 65,535 characters, which is the budget
 shared with dialogue. They cost 5,871 characters (9% of the total) before being stripped.
-Rationale belongs on the wiki, in this file, or in the commit message; not in `pong.p8`.
+Rationale belongs on the wiki, in this file, or in the commit message; not in the cart.
 The `-->8` tab separators look like comments and are not — they are structural.
 
 Engine footprint is a standing priority. When two implementations are equally correct,
