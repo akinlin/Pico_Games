@@ -139,7 +139,7 @@ ACT_CONFIGS = {
  {palette=2, phosphor_mode=true, nickname="dum"},
  {palette=3, phosphor_mode=true, nickname="skr"},
  {palette=4, phosphor_mode=true, nickname="whr"},
- {palette=5, phosphor_mode=true, nickname="plr"},
+ {palette=5, phosphor_mode=true, nickname="plr", ai_whiff=0},
  {palette=1, phosphor_mode=false, ball_count=40, speed_tier_pin=3, ai_enabled=true}
 }
 
@@ -612,7 +612,6 @@ end
 -->8
 AI_DELAY = 48
 AI_ERR = 30
-AI_WHIFF = 0.05
 AI_WHIFF_OFF = 10
 
 DEFAULT_CFG = {
@@ -635,6 +634,7 @@ DEFAULT_CFG = {
  com_serves_every_point=false,
  serve_random=false,
  ai_enabled=true,
+ ai_whiff=0.05,
  palette=1,
  phosphor_mode=true,
  nickname=nil
@@ -1122,7 +1122,7 @@ function pong:predict(b)
         pr.since += 1
         return
     end
-    if (not pr) player1.whiff = rnd() < AI_WHIFF and AI_WHIFF_OFF * coin_flip() or 0
+    if (not pr) player1.whiff = rnd() < self.cfg.ai_whiff and AI_WHIFF_OFF * coin_flip() or 0
 
     local face = player1.x + player1.width + b.radius
     local y = b.y + b.dy * ((face - b.x) / b.dx)
