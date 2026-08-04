@@ -472,9 +472,8 @@ function level:load()
         self.stage.on_complete = function()
             self.pre = nil
             self.pong.cfg.ai_enabled = true
-            self.pong.com_handicap = -hud.p2_score
-            hud.p1_score = 0
             self.stage = self.main
+            self.stage.spotted = true
             self.stage:reset()
         end
     end
@@ -604,19 +603,18 @@ function draw_debug()
     if (player1.prediction) then
         local pr = player1.prediction
         rect(pr.x-1,pr.y-1,pr.x+1,pr.y+1,player1.collisiontextboxcolor)
-        print(p:ai_level(),2,2,player1.collisiontextboxcolor)
     end
 end
 
 -->8
-AI_LEVELS = {
- {12,1},{18,5},{24,10},{30,15},{36,20},{42,25},{48,30},{54,35},{60,40},
- {66,45},{72,50},{78,55},{84,60},{90,65},{96,70},{102,75},{108,80}
-}
-AI_TIE_TIER = 9
+AI_DELAY = 24
+AI_ERR = 10
+AI_WHIFF = 0.05
+AI_WHIFF_OFF = 10
 
 DEFAULT_CFG = {
  paddle_height={6,6},
+ paddle_pad={0,2},
  paddle_accel={0.08,0.3},
  paddle_max_speed={2.5,3},
  ball_count=1,
@@ -631,8 +629,6 @@ DEFAULT_CFG = {
  scoring_enabled=true,
  com_serves_every_point=false,
  ai_enabled=true,
- ai_mode="self_balancing",
- ai_tier=AI_TIE_TIER,
  palette=1,
  phosphor_mode=true,
  nickname=nil
@@ -655,7 +651,6 @@ function pong:configure(cfg)
     end
     self.cfg = c
     tb.rate = c.cli_rate or TB_REVEAL
-    self.com_handicap = c.initial_score_com
     self.winner = 0
 end
 
@@ -756,6 +751,8 @@ function pong:make_paddle(x,side)
     p.dir = 0
     p.v = 0
     p.side = side
+    p.pad = self.cfg.paddle_pad[side]
+    p.whiff = 0
     p.miny = h
     p.maxy = (PLAYFIELD_BOTTOM+1) - h - h
     p.visible = false
@@ -800,14 +797,6 @@ function pong:add_ball()
     }
     add(balls, b)
     return b
-end
-
-function pong:ai_level()
-    if (self.cfg.ai_mode == "fixed") then
-        return mid(1, self.cfg.ai_tier, #AI_LEVELS)
-    end
-    local diff = (hud.p1_score - self.com_handicap) - hud.p2_score
-    return mid(1, AI_TIE_TIER + diff, #AI_LEVELS)
 end
 
 function pong:create_prediction(s,dx,r,ex,ey,x,y,d)
@@ -1013,36 +1002,39 @@ end
 
 function pong.ball_intercept(ball, paddle, nx, ny)
     pt = nil
+    local pd = paddle.pad or 0
+    local ptop = paddle.y - pd
+    local pbot = paddle.y + paddle.height + pd
     if (nx < 0) then
-        pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
-                        (paddle.x+paddle.width)  + ball.radius, 
-                        paddle.y - ball.radius, 
-                        (paddle.x+paddle.width)  + ball.radius, 
-                        (paddle.y+paddle.height) + ball.radius, 
+        pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny,
+                        (paddle.x+paddle.width)  + ball.radius,
+                        ptop - ball.radius,
+                        (paddle.x+paddle.width)  + ball.radius,
+                        pbot + ball.radius,
                         "right")
     elseif (nx > 0) then
-        pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
-                        paddle.x - ball.radius, 
-                        paddle.y - ball.radius, 
-                        paddle.x - ball.radius, 
-                        (paddle.y+paddle.height) + ball.radius,
+        pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny,
+                        paddle.x - ball.radius,
+                        ptop - ball.radius,
+                        paddle.x - ball.radius,
+                        pbot + ball.radius,
                         "left")
     end
 
     if (pt == nil) then
         if (ny < 0) then
-            pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
-                            paddle.x - ball.radius, 
-                            (paddle.y+paddle.height) + ball.radius, 
-                            (paddle.x+paddle.width) + ball.radius, 
-                            (paddle.y+paddle.height) + ball.radius,
+            pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny,
+                            paddle.x - ball.radius,
+                            pbot + ball.radius,
+                            (paddle.x+paddle.width) + ball.radius,
+                            pbot + ball.radius,
                             "bottom")
         elseif (ny > 0) then
-            pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
-                            paddle.x   - ball.radius, 
-                            paddle.y    - ball.radius, 
-                            (paddle.x+paddle.width)  + ball.radius, 
-                            paddle.y    - ball.radius,
+            pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny,
+                            paddle.x   - ball.radius,
+                            ptop    - ball.radius,
+                            (paddle.x+paddle.width)  + ball.radius,
+                            ptop    - ball.radius,
                             "top")
         end
     end
@@ -1088,13 +1080,13 @@ function pong:run_ai(b)
 end
 
 function pong:predict(b)
-    local lvl = AI_LEVELS[self:ai_level()]
     local pr = player1.prediction
     if pr and ((pr.dx * b.dx) > 0) and ((pr.dy * b.dy) > 0)
-        and (pr.since < lvl[1]) then
+        and (pr.since < AI_DELAY) then
         pr.since += 1
         return
     end
+    if (not pr) player1.whiff = rnd() < AI_WHIFF and AI_WHIFF_OFF * coin_flip() or 0
 
     local face = player1.x + player1.width + b.radius
     local y = b.y + b.dy * ((face - b.x) / b.dx)
@@ -1110,10 +1102,10 @@ function pong:predict(b)
     end
 
     local closeness = (b.x - face) / gm.screenwidth
-    local err = lvl[2] * closeness
+    local err = AI_ERR * closeness
     player1.prediction = {
         x=face,
-        y=y + (rnd(err*2) - err),
+        y=y + (rnd(err*2) - err) + player1.whiff,
         since=0,
         dx=b.dx,
         dy=b.dy
@@ -1270,6 +1262,14 @@ function term:done()
 	return self.i >= #self.src and #self.queue == 0
 end
 
+function term:gap()
+	if (#self.rows == 0 and self.cur == "") return
+	if (self.cur != "") self:push(self.cur,self.v)
+	self.cur = ""
+	self.src = ""
+	self:push("",self.v)
+end
+
 CLI_BOOT = {
 	{"pico-8 cli",true},
 	{"(c) lexaloffle games llp",true,30},
@@ -1318,7 +1318,8 @@ end
 T_SHORT = 45
 T_MED = 90
 T_LONG = 180
-T_POOL = T_MED
+T_POOL_MIN = T_MED * 4
+T_POOL_MAX = T_MED * 10
 
 stage = {}
 stage.__index = stage
@@ -1374,13 +1375,15 @@ function stage:rest()
 	self.idle = true
 	self.said = false
 	self.t = 0
+	self.gap = T_POOL_MIN + rnd(T_POOL_MAX - T_POOL_MIN)
 end
 
-function stage:pick_pool()
+function stage:pick_pool(tb)
 	local n = #self.pools
 	local i = flr(rnd(n)) + 1
 	if (n > 1 and i == self.lastp) i = (i % n) + 1
 	self.lastp = i
+	tb:gap()
 	self:goto_section(self.pools[i])
 end
 
@@ -1462,7 +1465,7 @@ function stage:update(tb)
 	if self.idle then
 		if (#self.pools == 0 or not tb:done()) return
 		self.t += 1
-		if (self.t >= T_POOL) self:pick_pool()
+		if (self.t >= self.gap) self:pick_pool(tb)
 		return
 	end
 
@@ -1491,10 +1494,18 @@ local intro = stage:new("intro")
 stages[6] = intro
 
 intro:section({
-	"intro line 1",
-	"intro line 2",
-	"intro line 3",
-	{"intro line 4",T_MED}
+	{"hello!?",T_LONG},
+	{"where is the second player?",T_LONG},
+	{"are they in the bathroom?",T_LONG},
+	"maybe you should wait for them",
+	{"its their quarter too",T_MED},
+	{"you know pong is a 2-player game right?",T_LONG},
+	{"dont have any friends?",T_MED},
+	"sorry what i mean is",
+	{"do you want some help?",T_MED},
+	{"never got to play before",T_LONG},
+	{"i bet i am really good",T_MED},
+	{"brb, gonna jump in real quick",T_LONG}
 })
 
 function intro:init()
@@ -1503,7 +1514,6 @@ function intro:init()
 end
 
 function intro:machine()
-	hud.p1_score = 0
 	if (self.idle and hud.p2_score >= INTRO_TRIGGER) self:goto_section(1)
 end
 
@@ -1511,22 +1521,20 @@ local denial = stage:new("denial")
 stages[1] = denial
 
 denial:section({
-	"lead-in line 1",
-	{"lead-in line 2",T_MED}
+	{"there we go",T_MED},
+	{"alright, this feels good",T_LONG},
+	{"a little trickier than I thought",T_MED},
+	{"i will shut up now so we can play",T_MED}
 })
 
 denial.cps = {}
 
-function denial:checkpoint(n,pl,cm)
-	add(self.cps,{n,self:branch(pl),self:branch(cm)})
+function denial:checkpoint(n,ls)
+	add(self.cps,{n,self:branch(ls)})
 end
 
-denial:checkpoint(7,
-	{"cp7 player line 1","cp7 player line 2"},
-	{"cp7 com line 1","cp7 com line 2"})
-denial:checkpoint(10,
-	{"cp10 player line 1"},
-	{"cp10 com line 1"})
+denial:checkpoint(7,{"cp7 line 1","cp7 line 2"})
+denial:checkpoint(10,{"cp10 line 1"})
 
 denial:pool({"pool 1 line 1"})
 denial:pool({"pool 2 line 1","pool 2 line 2"})
@@ -1542,22 +1550,22 @@ denial.win_section = denial:branch({
 })
 
 function denial:init()
-	local s = hud.p2_score
+	local hi = max(hud.p1_score,hud.p2_score)
 	self.fired = {}
 	for i=1,#self.cps do
-		if (self.cps[i][1] <= s) self.fired[i] = true
+		if (self.cps[i][1] <= hi) self.fired[i] = true
 	end
-	self.idle = s == 0
+	self.idle = not self.spotted
+	self.spotted = false
 end
 
 function denial:machine()
-	local b = hud.p2_score
-	local hi = max(hud.p1_score,b)
+	local hi = max(hud.p1_score,hud.p2_score)
 	for i=1,#self.cps do
 		local c = self.cps[i]
 		if not self.fired[i] and hi >= c[1] then
 			self.fired[i] = true
-			self:goto_section(b >= c[1] and c[2] or c[3])
+			self:goto_section(c[2])
 			return
 		end
 	end
