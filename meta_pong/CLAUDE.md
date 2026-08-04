@@ -51,9 +51,9 @@ Rules that matter:
 
 ## How we work
 
-**You cannot see this code run.** There are no screenshots and no test harness. Every
-behavioral claim you make is a hypothesis until the user launches the cart and reports
-back. Therefore:
+**You cannot see this code run.** There are no screenshots, and how the game *feels* is
+never answerable from here. Every behavioral claim you make is a hypothesis until the user
+launches the cart and reports back. Therefore:
 
 - Work in small increments that the user can verify by eye in one sitting.
 - End every change with a short **"verify this"** block: what to look at, what correct
@@ -91,6 +91,19 @@ printh("resolving="..tostr(gm.resolving).." winner="..p.winner)
 Work on a copy in the scratchpad, never the real cart. `_draw()` is not called, so nothing
 visual can be checked this way — how the game *feels* still needs a human, and that is
 most of what matters.
+
+**Balance is measurable, and guessing at it has been wrong every time.** Overriding
+`pong:handle_game_input()` with a controller built like `run_ai` — its own reaction delay
+and aim error — puts the player on the same scale as COM, so "how much weaker than COM can
+the player be and still rally?" becomes a number. Hook `score_point` to log `b.hits`, set
+`win_score` high so the match never resolves, and call `p:update_game_state()` in a bare
+loop. 30 points per configuration runs in seconds; treat ±10 points of win rate as noise.
+M12 used this to find that softening COM *shortens* rallies, that rally length is capped at
+roughly `1/AI_WHIFF`, and that longer rallies amplify the skill gap rather than closing it
+— all three the opposite of what reading the code suggested. Two traps: `gm:start_level()`
+loads Denial's Intro, which sets `ai_enabled = false`, so force it back on or COM's paddle
+never moves; and PICO-8 numbers cap at 32767, so a frame guard of 300000 silently wraps
+negative and the loop never runs.
 
 **The harness copy must override `CD_ID`.** `cartdata` is keyed by name, not by cart file,
 so a scratchpad copy writes to the *same* save file as the real cart. A harness that calls
@@ -252,12 +265,12 @@ the pixel-aspect correction, which is why angles carry over exactly.
 
 | Element | Value |
 |---|---|
-| Paddle | 1 px wide × 6 px tall |
+| Paddle | 1 px wide × 6 px tall drawn. COM collides 6; the **player collides 8**, plus 2 px of `paddle_pad` each end |
 | Ball | 2 × 2 px (radius 1) |
 | Net | x = 64, 1 px wide, 2 on / 2 off |
 | COM paddle x | 20 |
 | Player paddle x | 108 |
-| Paddle travel | top-edge `y` from **6 to 84** (one paddle height of dead zone each end) |
+| Paddle travel | top-edge `y` from **6 to 84** for a 6 px paddle — one paddle height of dead zone each end, so the player's 8 px body travels 8 to 80 |
 | Serve x | 66 |
 
 Ball, net, and paddle *width* are rounded up to minimum legible size — strict scaling
@@ -270,10 +283,12 @@ The ball moves **sub-pixel on most frames**. Store position as a fractional valu
 PICO-8 numbers are natively 16.16 fixed point, so this costs nothing — and round only
 at draw time. Integer pixel steps cannot reproduce the angle set.
 
-This matters most in zone selection: the 6px paddle divides into eight **0.75 px**
-bands, narrower than the ball. Zone selection uses the **fractional** offset between
-ball center and paddle top edge. Rounding here collapses eight zones into six and
-destroys the flat center band.
+This matters most in zone selection. The eight bands are the paddle's **collidable
+height / 8** — 0.75 px on a 6 px paddle, narrower than the ball. Zone selection uses the
+**fractional** offset between ball center and paddle top edge. Rounding here collapses
+eight zones into six and destroys the flat center band. The divisor was a hardcoded 0.75
+until M12, which silently broke every paddle taller than 6 — including Bargaining's
+longer-paddle choice.
 
 ### The velocity model — 42 vectors
 
@@ -281,14 +296,21 @@ Vertical and horizontal velocity come from **completely independent sources**, e
 as in the hardware. 7 vertical states × 3 horizontal tiers × 2 directions = 42.
 
 **Horizontal speed** — three discrete tiers off a rally hit counter. There is no
-continuous acceleration. The counter saturates at 12 and resets to tier 1 on any point
+continuous acceleration. The counter saturates at 16 and resets to tier 1 on any point
 scored or new match.
+
+**The 6 / 16 thresholds are a playability decision, not the hardware's 4 / 12.** The
+cross-court column is the reading budget: against ~13 frames of human reaction plus 35 for
+the paddle to cross the field, tier 3's 61 frames leave a 1.2× margin against tier 2's
+1.8×. Delaying the climb keeps rallies where the dialogue can land. Note the *slowest*
+tier bounces most — vertical speed is independent of tier, so a steepest return crosses
+302 px vertically at tier 1 (about three wall bounces) against one at tier 3.
 
 | Rally hits | Tier | Derived | Shipped (× 1.4) | Cross-court |
 |---|---|---|---|---|
-| < 4 | 1 | 0.341 | **0.477** | 3.07 s |
-| 4–11 | 2 | 0.683 | **0.956** | 1.53 s |
-| ≥ 12 | 3 | 1.024 | **1.434** | 1.02 s |
+| < 6 | 1 | 0.341 | **0.477** | 3.07 s |
+| 6–15 | 2 | 0.683 | **0.956** | 1.53 s |
+| ≥ 16 | 3 | 1.024 | **1.434** | 1.02 s |
 
 "Cross-court" means the **88 px paddle-to-paddle separation**, not the 128 px screen
 width. Timing wall-to-wall gives ~4.5 s at tier 1 and will look like a failure on
@@ -362,6 +384,15 @@ One model for all five acts: line-segment intersection between the ball's per-fr
 movement vector and each wall's near edge, expanded by ball radius. Chosen because it
 matches the hardware's rectangle-region approach and is inherently tunneling-proof at
 sub-pixel speeds. Corners resolve as reliably as flat edges.
+
+**It detects the ball *crossing* a face, so it misses the overlap case the hardware had:**
+once the ball is past the paddle's plane nothing tests it again, and a paddle sweeping
+vertically onto it passes straight through. `paddle_catch` takes that hit while the two
+still overlap on screen. Anything that extends a paddle's reach must be applied in **two**
+places — `ball_intercept()` *and* the swept-AABB reject above it in `update_ball()`.
+Extending only the intercept makes the paddle behave *worse* near its edges rather than
+doing nothing, because the AABB then gates the extension on the ball's direction of
+travel.
 
 Top/bottom bounds and both paddles share one collidable shape in `walls[]`
 (`x, y, width, height`). In `attract`, two side walls are added so the ball bounces off
@@ -469,13 +500,20 @@ local anger = stage:new("anger")
 stages[2] = anger
 
 anger:section({
-    line("...", T_LONG),
-    line("...", T_MED)
+    "a line on the default hold",
+    {"a line that needs to breathe", T_LONG}
 })
 
-anger.win_section  = anger:branch({ line("...", T_MED) })
-anger.lose_section = anger:branch({ line("...", T_MED) })
+anger:pool({"a timed non-sequitur"})
+
+anger.win_section  = anger:branch({"..."})
+anger.lose_section = anger:branch({"..."})
 ```
+
+A line is a bare string, or `{text, duration}` where it needs a hold other than
+`T_SHORT`. `pool()` registers a section that fires at random on a recurring timer whenever
+the stage has nothing else to say; `stage.idle` covers both that resting state and the
+gate before a stage's opening game event.
 
 `section()` extends the normal flow. `branch()` appends a section **outside** it, reachable
 only when the match resolves — an ending cannot be walked into. `stage:goto_section(i)`
@@ -487,19 +525,20 @@ waits on the win/lose branch, so COM gets the last word before the game advances
 `init()` is called by `stage:reset()` on every act load, so per-act state starts clean.
 
 ```lua
-function denial:init()
-    self.armed = DEBUG_AI
+function intro:init()
+    self.idle = true
+    p.cfg.ai_enabled = false
 end
 
-function denial:machine()
-    if not self.armed and hud.p2_score > 1 then
-        self.armed = true
-        gm.level.pong.cfg.ai_enabled = true
-        hud.p1_score = 0
-        hud.p2_score = 0
-    end
+function intro:machine()
+    if (self.idle and hud.p2_score >= INTRO_TRIGGER) self:goto_section(1)
 end
 ```
+
+`level:load()` runs `pong:configure()` **before** `stage:reset()`, which is what lets a
+stage's `init()` override config for its own duration. A level may also own a *pre-stage*:
+Denial's owns the Intro, loads it first, and swaps at its close without re-running
+`load()`, so the score carries across as the spot.
 
 **If an act needs behavior no axis expresses, add an axis — do not special-case the
 engine.** That rule is why there is still one engine.
@@ -622,6 +661,16 @@ Flagged so you don't "fix" them:
 6. **Scanlines are scoped, not full-screen** — rows 1–19 and 96–127 only. A faithful
    scanline is finer than one pixel at this resolution, and full-screen coverage caused
    eye strain and posed a photosensitivity risk.
+7. **The speed tiers climb at 6 and 16 volleys, not 4 and 12.** Reading budget — see
+   *The velocity model*. Rallies are where the dialogue lands, so the ball stays legible
+   longer than the hardware kept it.
+8. **The player's paddle is invisibly better than COM's**, three ways: 8 px of collidable
+   height behind a 6 px sprite (`paddle_draw`), 2 px of `paddle_pad` past each end, and a
+   3 px `paddle_catch` window that rescues a ball the paddle sweeps onto after it has
+   passed. All three are per-side and all are zero for COM. **The advantage is deliberately
+   invisible** — a visibly larger paddle was built, playtested and rejected for reading as
+   the game conceding. Bargaining's longer paddle is the exception that proves it: an
+   advantage the player *chooses* is allowed to show.
 
 ---
 
@@ -642,8 +691,9 @@ Issues are where all work and all status live. The open ones:
 | **#67** | M17 release build. Compressed size has never been measured and the cart has no `__label__` |
 | **#68** | Full-playthrough pass — the seams *between* acts, which no act's own issue covers |
 
-**Read #54 before starting #60.** `DEBUG_AI` bypasses Denial's 2-point arming, which is
-exactly the mechanic #60 exists to build.
+`DEBUG_AI` was deleted in M12 — it forced `ai_enabled` for every act and bypassed the
+2-point arming that #60 exists to build. `DEFAULT_CFG.ai_enabled` is now `true`, and the
+Intro stage owns the unmanned exception.
 
 **[Project board 3](https://github.com/users/akinlin/projects/3) is a second surface and it
 does not update itself.** Closing an issue moves its card to Done automatically; **creating
