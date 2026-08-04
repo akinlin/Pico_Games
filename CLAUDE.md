@@ -13,25 +13,33 @@ do not touch it.
 
 ## Source of truth
 
-The design lives in the GitHub wiki, mirrored into this repo:
+**The design lives in the GitHub wiki, and only there.**
 
-- `docs/game-design.md` — story, acts, player experience. **Authoritative.**
-- `docs/tech-design.md` — how it gets built. Derived from Game Design.
-- `docs/BUILD-PLAN.md` — ordered milestones and their acceptance criteria.
+- [Meta Pong wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong) — one page, three
+  sections: **Game Design**, **Tech Design**, **Reference Materials**. **Authoritative.**
+- `docs/BUILD-PLAN.md` — ordered milestones and their acceptance criteria. Repo-only.
+
+The repo mirrors of the wiki (`docs/game-design.md`, `docs/tech-design.md`,
+`docs/reference-materials.md`) were **deleted at the end-of-Alpha docs pass, 2026-08-03**.
+They drifted, and editing a mirror left changes the next sync silently reverted. There is
+no local copy now — read the wiki. It is a git repo if you need one:
+
+```bash
+git clone https://github.com/akinlin/Pico_Games.wiki.git
+```
 
 `handoffs/` holds self-contained briefs for work that runs in its own session:
-`acts-m12-m16.md` (the next build session) and `docs-pass.md` (the end-of-Alpha
-documentation pass). Each stands alone. The terminal design session ran on 2026-08-03;
-its decisions live in `docs-pass.md` items 14–24.
+`acts-m12-m16.md` (the next build session).
 
 Rules that matter:
 
 1. Game Design is upstream of Tech Design. If an implementation detail implies a
    design change, stop and raise it — do not resolve it in code.
-2. Tech Design describes **target state**, never build status. Build status lives in
-   GitHub issues and `docs/BUILD-PLAN.md`.
-3. If code and `docs/` disagree, `docs/` wins and the code is a bug.
-4. If you believe `docs/` is wrong, say so and wait. Do not edit `docs/` unless asked.
+2. **The wiki records settled decisions and shipped implementation only.** Build status,
+   open questions and not-yet-taken ideas live in GitHub issues and `docs/BUILD-PLAN.md`,
+   never on the wiki.
+3. If code and the wiki disagree, the wiki wins and the code is a bug.
+4. If you believe the wiki is wrong, say so and wait. Do not edit it unless asked.
 
 ---
 
@@ -44,7 +52,7 @@ back. Therefore:
 - Work in small increments that the user can verify by eye in one sitting.
 - End every change with a short **"verify this"** block: what to look at, what correct
   looks like, and what a specific failure would look like. Be concrete —
-  "the ball should cross the field in about 4.3 seconds at rally start" beats
+  "the ball should cross the field in about 3.1 seconds at rally start" beats
   "check the ball speed feels right."
 - When a value needs playtesting rather than derivation (paddle acceleration curve,
   dialogue timer durations), say so explicitly and give a starting value with a range.
@@ -163,15 +171,15 @@ Three categories of content in this game are authored by the user, never by Clau
 
 **The boundary is authorship, not subject matter.** Transcribing a documented
 specification is in bounds — the three hardware sounds are given as frequencies and
-durations in `docs/reference-materials.md`, the act palettes are listed in
-`docs/game-design.md`, and the playfield geometry is derived from the 1972 hardware.
-Reproducing those is transcription. *Inventing* a sound, a line, or a sprite is
-authorship, and is not.
+durations in the wiki's *Reference Materials*, the act palettes are listed in its *Game
+Design*, and the playfield geometry is derived from the 1972 hardware. Reproducing those
+is transcription. *Inventing* a sound, a line, or a sprite is authorship, and is not.
 
 **Placeholders must be obvious and flagged.** Where a milestone needs an asset that does
-not exist yet — the typewriter cue is the current case — reuse an existing in-bounds
-asset, say so plainly in the verify block, and record it in the build plan's deferred
-table so it gets replaced rather than shipped by accident.
+not exist yet, either reuse an existing in-bounds asset or leave the hook silent — say
+which, plainly, in the verify block, and track it so it gets replaced rather than shipped
+by accident. **The per-character typewriter cue is the live case:** `snd_type()` is wired
+into `term:update()` and is deliberately empty, awaiting a human-authored sound.
 
 ---
 
@@ -181,29 +189,29 @@ table so it gets replaced rather than shipped by accident.
 |---|---|---|
 | Characters | 65,535 | **The binding constraint.** Shared between engine code and every line COM speaks. Engine bloat directly costs dialogue. |
 | Tokens | 8,192 | A whole string literal is 1 token, so dialogue is nearly free here. |
-| CPU | 139,810 cycles/frame at 60fps | Binds only during Anger's swarm. |
+| CPU | 139,810 cycles/frame at 60fps | Never binds. Worst measured case is 40%. |
 | Compressed code | 15,360 bytes | Only enforced for `.p8.png` / `.p8.rom` export. |
 | Sprites / SFX / music | 256 / 64 / 64 | Not close to binding. |
 
-Estimated worst-case frame, for budgeting against: `cls()` 2,052 cycles (1.5%); 40 balls
-swept collision ~20,000 (~14%); drawing 40 balls ~1,500 (~1%); scanlines ~0; phosphor
-~33,000 (~24%). Anger therefore runs at roughly **17%** of frame before dialogue, AI and
-paddle costs; the four acts that do run phosphor land near **27%** against a single ball.
-Both are estimates from published per-operation costs, not measurements.
+Measured frame cost, not estimated: **~24%** in normal single-ball play with phosphor on;
+**12%** for 40 balls at tier 3 with phosphor off; **40%** for both together. The 40-ball
+figure is a stress configuration, not a decision about swarm size. Note the cycles-per-frame
+convention (2²³ ÷ 60) is the community reading of the manual's "8 MHz virtual CPU," not a
+figure the manual states.
 
 **The cart carries no comments.** Comments are free against the token budget — the
 manual's *Code Limits* excludes them, along with commas, periods, `local`s, semicolons
 and `end`s — but they count in full against the 65,535 characters, which is the budget
 shared with dialogue. They cost 5,871 characters (9% of the total) before being stripped.
-Rationale belongs in `docs/`, in this file, or in the commit message; not in `pong.p8`.
+Rationale belongs on the wiki, in this file, or in the commit message; not in `pong.p8`.
 The `-->8` tab separators look like comments and are not — they are structural.
 
 Engine footprint is a standing priority. When two implementations are equally correct,
 take the smaller one. Bargaining's pre-match choice system is the one sanctioned
 exception — it is expected to be the largest act-specific chunk of code in the cart.
 
-**Target: PICO-8 0.2.7, cart header `version 43`.** The file currently says
-`version 41` (0.2.5g). 0.2.7 fixes a `dset()` flush bug that silently drops writes when
+**Target: PICO-8 0.2.7, cart header `version 43`** — which is what the file says; keep it
+there. 0.2.7 fixes a `dset()` flush bug that silently drops writes when
 data changes more than once in a second — persistence is unreliable without it. There
 is no 0.2.8; do not "upgrade" past 0.2.7.
 
@@ -262,15 +270,22 @@ as in the hardware. 7 vertical states × 3 horizontal tiers × 2 directions = 42
 continuous acceleration. The counter saturates at 12 and resets to tier 1 on any point
 scored or new match.
 
-| Rally hits | Tier | px/frame | Cross-court |
-|---|---|---|---|
-| < 4 | 1 | 0.341 | 4.3 s |
-| 4–11 | 2 | 0.683 | 2.1 s |
-| ≥ 12 | 3 | 1.024 | 1.4 s |
+| Rally hits | Tier | Derived | Shipped (× 1.4) | Cross-court |
+|---|---|---|---|---|
+| < 4 | 1 | 0.341 | **0.477** | 3.07 s |
+| 4–11 | 2 | 0.683 | **0.956** | 1.53 s |
+| ≥ 12 | 3 | 1.024 | **1.434** | 1.02 s |
 
 "Cross-court" means the **88 px paddle-to-paddle separation**, not the 128 px screen
-width. Timing wall-to-wall gives ~6.3 s at tier 1 and will look like a failure on
+width. Timing wall-to-wall gives ~4.5 s at tier 1 and will look like a failure on
 correct code.
+
+**`ball_scale = 1.4` is a shipped playability multiplier, playtested not derived.** It
+multiplies `BALL_SPEEDS` *and* `BALL_VZONES`, so the 42-vector model and every return
+angle carry over exactly — only the clock changes. The derived column is the derivation
+and stays on record; do not "correct" the cart back to it. `BALL_CAL = 1.4` couples
+paddle response to it (see below): **if 1.4 is ever folded into `BALL_SPEEDS`, `BALL_CAL`
+must become 1 in the same change**, or the paddle silently drops to 2.14 / 0.21.
 
 **Vertical speed** — set solely by which of the paddle's eight zones the ball strikes.
 Note that **two adjacent center zones both return horizontally**: the flat band is a
@@ -286,6 +301,9 @@ quarter of the paddle face, the widest single feature on it, not a thin sweet sp
 | 6 | 0.390 down | ±1 |
 | 7 | 0.780 down | ±2 |
 | 8 | 1.171 down | ±3 |
+
+Every value in that table is multiplied by the same `ball_scale`, which is exactly why
+the angles below are unaffected by it.
 
 Resulting angles — note that **faster rallies give shallower angles**:
 
@@ -305,8 +323,8 @@ The original paddle is an analog potentiometer with no velocity signal anywhere 
 circuit. Direction of travel at contact cannot and does not affect the return. Return
 angle is determined entirely by zone and tier.
 
-`apply_spin()` currently exists in `pong.p8` and must be deleted. Spin survives only in
-the Parking Lot as an unused idea for signalling COM cheating.
+`apply_spin()` was deleted in M3. Spin survives only as a parked idea for signalling COM
+cheating — do not reintroduce it.
 
 ### Serve
 
@@ -358,9 +376,8 @@ dedicated oscillator. All muted in `attract`.
 
 ## Architecture
 
-Two top-level states only — `attract` and `level`. (The current cart has six:
-title/menu/options/level/gameover/intermission. They collapse into these two.)
-**Any button press** moves `attract` → `level`.
+Two top-level states only — `attract` and `level`. **Any button press** moves
+`attract` → `level`.
 
 `level_index` on entering `level` is set to one past the last **persisted, completed**
 act, or 1 (Denial) with no checkpoint. A checkpoint of 5 means the game is finished;
@@ -368,7 +385,7 @@ start begins a fresh run at Denial with the completion badge left in place.
 
 **One Pong engine, parameterized per act.** Never fork the engine. Each `level` owns a
 Customization config applied to its `pong` instance on load. The axes are listed in
-`docs/tech-design.md` → Architecture → Per-act configuration. If an act needs behavior
+the wiki's *Tech Design* → Architecture → Per-act configuration. If an act needs behavior
 that is not expressible as a config axis, that is a signal to add an axis, not to
 special-case the engine.
 
@@ -382,7 +399,7 @@ Two axes whose values are easy to under-specify:
   **WHR** (Depression), **PLR** (Acceptance). All three characters long, which is why
   name entry is three characters. COM's own displayed name never changes.
 
-**Persistence** via `cartdata("akinlin_metapong_1")`:
+**Persistence** via `cartdata("metapong_1972_1")`:
 
 - `furthest_completed_act` — `dset(0, n)` / `dget(0)`, number **0–5** where 5 means
   finished. Written on each act win.
@@ -402,14 +419,17 @@ Intro's close trigger fires. Each act's `stage` plugs in its own state machine
 subclassing — Denial's score-checkpoint branching and Anger's linear gated sequence are
 authored independently.
 
-The current code calls these `dialogue`/`section`/`phrase`. Rename to
-`stage`/`section`/`line` (issue #33).
+**`win_section` means the *player* wins.** `stage:resolve(w)` takes the raw winner id
+(`2` = player, `1` = COM) and the naming is the only thing carrying that meaning — wiring
+the branches to the opposite triggers is a silent failure that reads as the authored lines
+being wrong.
 
 Two dialogue rules that are easy to violate by accident:
 
-- **Scrollback history clears whenever the window closes and reopens.** A Section runs
-  continuously between its open- and close-trigger; it does not inherit the previous
-  Section's lines.
+- **Scrollback is continuous and clears exactly once per loop** — at stage end, immediately
+  before `> run attract`. Not between Sections, and not on entering attract, so
+  `> press any button` and `> run game` persist into the act and are pushed out by COM's
+  dialogue rather than wiped. The window never closes; there is no open/close animation.
 - **There is no player advance or skip button.** Dialogue is fully automatic. Do not add
   one. Bargaining's paddle-position choice system is a gameplay mechanic, not an
   exception to this.
@@ -420,26 +440,35 @@ Two dialogue rules that are easy to violate by accident:
 
 - **`_update60`, not `_update`.** 60 fps matches the machine's 60.05 Hz field rate, and
   every velocity above is expressed in units per 60 Hz frame.
-- **No `dt`.** The current cart derives `dt` from `time()` and multiplies velocities by
-  it. Delete that. Fixed 60 Hz means velocities are applied per frame, full stop. This
-  also removes a class of tunneling bugs.
-- **Palettes** are two precomputed 16-byte tables per act — base display palette and
-  darkened scanline palette — applied with `memcpy(0x5f10, addr, 16)` and
-  `memcpy(0x5f60, addr2, 16)`. One call each, ~5 tokens. They target the *display*
-  palette, so they recolor the entire frame including already-drawn pixels at zero
-  per-object cost. **Both must be swapped together on act load** or the scanlines keep
-  the previous act's colors.
+- **No `dt`.** Never derive a delta from `time()` and scale velocities by it. Fixed 60 Hz
+  means velocities are applied per frame, full stop. This also removes a class of
+  tunneling bugs. All narrative timers are frame counts for the same reason.
+- **Palettes** are two 16-byte writes per act — the base display palette at `0x5f10` and
+  the darkened scanline palette at `0x5f60` — each a single multi-value `poke()`, composed
+  at call time from `ACT_PALETTES` (game surface) and `CLI_PALETTES` (console surface),
+  which share one index. They target the *display* palette, so they recolor the entire
+  frame including already-drawn pixels at zero per-object cost. **Both must be written
+  together on act load** or the scanlines keep the previous act's colors. A **sixth row**
+  exists in both tables for attract, so the console can be green there and white in Denial.
 - **CRT scanlines** use per-line palette hardware: `poke(0x5f5f, 0x10)`, scanline
   palette at `0x5f60`–`0x5f6f`, per-line selection bitfield at `0x5f70`–`0x5f7f`. Set
-  once, applied by the display hardware at no per-frame cost. Always on, every act.
-  Two caveats: this shares `0x5f60`–`0x5f6f` with `fillp`'s secondary palette, so the
-  two cannot both be used; and **these addresses are undocumented in the manual**, so
-  re-verify against any future release.
-- **Phosphor glow** is a three-state per-act axis, `phosphor_mode`: `off` / `ball` /
-  `full`. `full` blends the whole previous frame (stashed in the unused spritesheet) and
-  **measures 29%** of the frame budget; `ball` trails only the ball and measures **4%**.
-  On in Denial, Bargaining, Depression, Acceptance; **off in Anger**, where the frame
-  goes to the swarm.
+  once, applied by the display hardware at no per-frame cost. **Scoped, not global** —
+  enabled on rows **1–19** (labels + score) and **96–127** (console band) only, never the
+  game area, enforced twice over: by the bitfield, and by the scanline palette being
+  identity for background, paddles and ball. Two caveats: this shares `0x5f60`–`0x5f6f`
+  with `fillp`'s secondary palette, so the two cannot both be used; and **these addresses
+  are undocumented in the manual**, so re-verify against any future release.
+- **Phosphor glow** is a per-act boolean, `phosphor_mode`, and it is **on in every act**.
+  It blends the whole previous frame, stashed in the otherwise-unused spritesheet, and
+  measures **~24%** of frame in normal play (40% against a 40-ball tier-3 swarm). The
+  earlier three-state `off`/`ball`/`full` axis and its discrete 2-dot ball trail were
+  deleted in M11a — do not reintroduce them.
+- **Phosphor requires `palt(0, false)`.** The blit is `sspr`, and colour 0 is transparent
+  to sprite drawing by default, so every background pixel of the blit is a no-op and the
+  screen is never actually cleared — PICO-8's own boot console text persists under the
+  playfield indefinitely. Set once at init, alongside `memset(0x0000, 0, 0x2000)` to stop
+  the spritesheet data flashing on frame 0. `cls()` is **not** the fix: it costs 2,052
+  cycles/frame to clear pixels the blit overwrites anyway.
 - **`pal()` with no arguments resets all three palettes** — draw, display and secondary —
   wiping both the act palette at `0x5f10` and the scanline palette at `0x5f60`. Restore
   individual draw entries explicitly. The symptom is an act rendering green-on-black.
@@ -473,13 +502,13 @@ the split.
 
 ### Still live
 
-- **`intercept()`'s ±140 / −50 clamps are load-bearing for the AI, not for the ball.**
-  Measured worst-case products against the 32,767 ceiling of a 16.16 number: ball-vs-wall
-  collision peaks at **12,480**, and the clamps never fire, because ball coordinates stay
-  inside [-1, 129]. The prediction ray is the opposite — `predict_wall` is 330 px tall, so
-  an unclamped tier-3 ray gives 122.9 × 330 = 40,551, which **wraps to −24,986** and
-  returns a garbage intersection. The clamps therefore stay until M6 reworks `predict()`,
-  and the AABB pre-reject is what keeps their cost out of the swarm's inner loop.
+- **The AI no longer casts a prediction ray, and that is why `intercept()` has no clamps.**
+  M6 replaced `predict_wall` with an algebraic solve for the intercept height plus a
+  reflection loop, so the ±140 / −50 coordinate clamps went with it. They existed because a
+  330 px prediction ray at tier 3 produced 122.9 × 330 = 40,551, which **wraps to −24,986**
+  against the 32,767 ceiling of a 16.16 number. Ball-vs-wall collision peaks at 12,480 and
+  never came close. **If anything ever reintroduces a long ray, the overflow comes back** —
+  ball coordinates staying inside [-1, 129] is the only thing keeping the products small.
 - **A new palette role must be added to the phosphor funnel or it burns in permanently.**
   `_draw()`'s `full` phosphor path has no `cls()` — the dimmed previous frame *is* the
   background. It maps roles `1`/`2`/`3` → `C_TRAIL1` → `C_TRAIL2` → `C_BG`, and **anything
@@ -489,8 +518,10 @@ the split.
   a `rectfill`, so it is deliberately left out.
 - **The score `hud.p1_x` / `p2_x` are field *inner* edges, not left edges.** The left
   score is right-aligned onto its edge so the pair stays symmetric about the net at any
-  digit count. `\^p` is *pinball* mode (wide + tall + stripey), so each glyph is **8 px**
-  wide, not 4 — which is what made an earlier placement overlap the net at double digits.
+  digit count. Digits are `\^w\^t` (wide + tall), so each glyph is **8 px** wide, not 4 —
+  which is what made an earlier placement overlap the net at double digits. Do not use
+  `\^p`: pinball mode also turns on *stripey*, which renders the digits dotted, and the
+  original machine's score is solid block numerals.
 
 ---
 
@@ -507,20 +538,23 @@ Flagged so you don't "fix" them:
    center (visual center H≈267 against a net at H=256) — a documented hardware defect.
    Meta Pong centers it properly and places paddles symmetrically at 44 px either side.
 3. **Ball, net, and paddle width** are rounded up to minimum legible size.
-4. **A 32px terminal band** exists at all, replacing 32 rows of playfield.
+4. **A 32-row console band** exists at all, replacing 32 rows of playfield.
+5. **Ball speed is 1.4× the derived hardware speed** — `ball_scale`, a playtested
+   playability multiplier applied to both axes so every angle survives.
+6. **Scanlines are scoped, not full-screen** — rows 1–19 and 96–127 only. A faithful
+   scanline is finer than one pixel at this resolution, and full-screen coverage caused
+   eye strain and posed a photosensitivity risk.
 
 ---
 
-## Known-stale GitHub issues
+## GitHub issues
 
-Several issues were written before the 2026-07-27 design review and describe superseded
-behavior. Read `docs/` first; treat these issue bodies as historical:
+**Issue bodies are not a source of truth and several predate the 2026-07-27 design review.**
+Read the wiki first, always. Where an issue body and the wiki disagree, the wiki wins and
+the issue is stale — say so rather than building from it.
 
-- **#30** — describes a 90° center segment and says to combine with `apply_spin()`.
-  Both wrong: two center zones return horizontally, and spin is cut entirely.
-- **#32** — says the CRT treatment is global and the technique is TBD. Scanlines are
-  global and the technique is specified; phosphor is per-act and off in Anger.
-- **#34** — says `furthest_completed_act` is 0–4 and `completion_name` is a string.
-  It's 0–5, and the name is three alphabet indices at `0x5e04`.
-- **#29** — lists Depression's ball as purple (`13`). It is white (`7`); Depression is
-  the easiest act to score in and the ball stays maximally legible.
+Known-stale at the 2026-08-03 docs pass: **#29** (Depression's ball is white `7`, not
+purple `13`), **#30** (two center zones return horizontally, and spin is cut entirely),
+**#32** (scanlines are scoped and specified; phosphor is on in every act), **#34**
+(`furthest_completed_act` is 0–5 and the name is three alphabet indices at `0x5e04`).
+Many M1–M11 issues also remain open against finished work.

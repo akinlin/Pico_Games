@@ -18,8 +18,9 @@ discovering its shape under pressure.
 ## How to run a milestone
 
 1. Branch: `git checkout -b m<N>-<slug>`.
-2. Read the milestone's *Spec* links in `docs/tech-design.md` and `docs/game-design.md`
-   before writing code.
+2. Read the milestone's *Spec* sections on the
+   [wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong) before writing code.
+   There are no repo mirrors — they were deleted at the docs pass.
 3. Implement. Keep `printh()` debug output behind a flag.
 4. Hand the user a **verify block** — the acceptance criteria below, phrased as things
    to look at on screen.
@@ -98,6 +99,8 @@ before this means tuning against a moving target.
 - Traverse times **paddle to paddle** (88 px, not the full 128 px screen):
   **~4.3 s / ~2.1 s / ~1.4 s**. Time them. Wall-to-wall gives ~6.3 s at tier 1 and
   would look like a failure on correct code.
+  *(M11a added `ball_scale = 1.4` on top, so the shipped cart times ~3.1 / ~1.5 / ~1.0 s.
+  These are the derived figures this milestone was verified against.)*
 - The speed change is a visible step at the 4th and 12th volley, not a ramp.
 - Speed resets to slow after every point.
 
@@ -385,8 +388,7 @@ mouse.
 
 ## M11b — The CLI as story element — #24
 
-**Spec:** `handoffs/docs-pass.md` items 14–24 (the design session's output; not yet in the
-design docs, which are frozen).
+**Spec:** Game Design → *The Console*; Tech Design → *The Narrative Engine*.
 
 The terminal stops being a plain dialogue window and becomes the host machine's console,
 with the Pong cart as a program running on it. Two voices share the band — `console`
@@ -423,50 +425,26 @@ same act with fresh dialogue.
 
 ---
 
-## Documentation freeze (Alpha)
+## Documentation pass — done
 
-**`docs/tech-design.md`, `docs/game-design.md`, `docs/reference-materials.md` and the
-GitHub wiki are frozen for the remainder of Alpha.** Do not edit them, and do not sync
-the wiki. Only `DEVLOG.md` and this file may be updated as work proceeds.
+**The end-of-Alpha documentation pass ran on 2026-08-03.** Everything the Alpha backlog
+held was folded into the [wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong),
+which is now the single source of truth — the three repo mirrors (`docs/game-design.md`,
+`docs/tech-design.md`, `docs/reference-materials.md`) were deleted in the same pass, and
+`handoffs/docs-pass.md` was retired with it.
 
-A single documentation pass happens at the end of Alpha and incorporates everything
-below. The correct order at that point is **wiki first, then re-sync the mirrors down** —
-`docs/*.md` carry a "MIRROR OF THE GITHUB WIKI / do not edit here" header, and editing
-the mirror leaves changes that the next sync silently reverts.
+The freeze is lifted. The wiki is editable again, under one standing rule: **it records
+settled decisions and shipped implementation only.** Anything undecided, deferred, or
+merely proposed belongs in a GitHub issue, and build status belongs here.
 
-As of the freeze, repo mirrors and wiki are consistent through M7b (wiki `2e419bc`), so
-this backlog starts empty. **Append to it whenever a milestone settles something the
-design docs don't yet reflect** — otherwise the end-of-Alpha pass has to reconstruct it
+**This backlog is empty and starts fresh.** Append to it whenever a milestone settles
+something the wiki doesn't yet reflect, so the next pass doesn't have to reconstruct it
 from commit messages.
 
 | Milestone | Needs writing up |
 |---|---|
-| M7b | `phosphor_mode` `full` vs `ball` — decision deferred until M10 gives dialogue a letter-by-letter reveal, since full-frame blending's effect on animated text cannot be judged before then. Both modes ship meanwhile |
-| M7a/M7b | ~~The pause-menu act selector and `DEBUG_ACT` are dev scaffolding.~~ **Superseded by M11b:** `DEBUG_ACT` is deleted; the act selector now sets `level_index`, writes the checkpoint and loads the level. Still a ship-or-strip decision, but it is functional navigation rather than scaffolding — and it **overwrites save progress**, which is the argument against shipping it |
-| M8 | **Parking Lot addition:** explore `paddle_accel` / `paddle_max_speed` as expressive per-situation settings rather than fixed per-act values — being able to change paddle response in different situations was noticeably good in playtest. Flagged deliberately as a *later* exploration, not scope creep into Alpha |
-| M8 | Playtest-tuned paddle values landed at `paddle_accel = 0.4`, `paddle_max_speed = 4.5` for the **player**. COM stays at 0.08 / 2.5 — the values it was actually playtested against. COM's own paddle response has never been tuned independently and probably wants its own pass, since it interacts with the `ai_levels` difficulty curve |
-| M8 | Measured **12%** of frame for 40 balls at tier 3 with phosphor off, against the ~17% budget estimate. The swarm has more headroom than the design assumed |
-| M10a | **Game Design change:** a loss no longer resets and immediately replays the act. It returns the player to **attract**, with the palette reverting to Denial's black and white — COM has gone quiet and is waiting for you to come back. Pressing start resumes the same act (fresh dialogue, same stage). Tech Design's *Resolving a level result* table says "Reset current level, replay same act", which describes the destination but not the trip through attract |
-| M10c | **Tech Design change:** the textbox `closed → opening → open → closing` state machine and its slide motion are **dropped**. The window is permanently open, a single scrolling scrollback view where lines are removed as they scroll off the top. Building the slide only to remove it later is wasted effort, and the CLI is getting further design attention |
-| M10b | **Tech Design / process addition:** record the audio asset boundary — audio is a human-created asset. The three hardware sounds are transcribed from documented reference-material specs and are in bounds; anything else, including the typewriter cue, is placeholder-only pending a human-authored replacement |
-| M11 | **Game Design change — phosphor is now `full` in every act, including Anger.** Measured 40% of frame with `full` plus the 40-ball swarm, and ~24% in normal play, which the design accepts. This removes a narrative beat that Game Design currently states explicitly: *"Phosphor glow disabled — the frame budget goes to the swarm instead. By this point COM has already abandoned any pretense that this is a faithful 1972 machine, so the loss of the period glow reads as intentional."* That rationale needs rewriting, and if the "machine stops pretending" signal is still wanted in Anger it needs another carrier. Raised before the change was made; the decision was taken with the tradeoff stated |
-| M11 | **Measured CPU, replacing estimates.** `full` phosphor + 40 balls at tier 3 = **40%**; normal single-ball play with `full` = **~24%**. Tech Design's budget table carries estimates of ~24% for phosphor and ~17% for the swarm; both should be replaced with measurements at the docs pass |
-| M11a | **Game Design change — the ball is 1.4× the hardware speed.** A global `ball_scale = 1.4` multiplies both `BALL_SPEEDS` and `BALL_VZONES`, so the 42-vector model and every return angle carry over exactly; only the clock changes. Effective tiers are **0.477 / 0.956 / 1.434 px/frame**, cross-court **3.07 s / 1.53 s / 1.02 s** against the derived 4.3 / 2.1 / 1.4. This contradicts CLAUDE.md's *"Numbers you must not get wrong"* table and the cross-court timings quoted in Tech Design; both need the divergence recorded rather than the numbers quietly overwritten, since the 1972 values remain the derivation and 1.4 is a playability multiplier on top. Decision was playtested, not derived |
-| M11a | **Paddle response retuned, superseding the M8 row above.** Player paddle is now `paddle_accel = 0.3`, `paddle_max_speed = 3` (was 0.4 / 4.5). The governing ratios, worth writing into Tech Design because they explain *why*: **R** = paddle max ÷ ball's steepest vertical (1.171 × scale) = **1.82**, and **T** = paddle max ÷ accel = **10 frames** to full speed. Overshoot is governed by T, not R — `move_paddle` has no momentum, so the smallest possible correction is bounded by ramp length. At 0.3 a 4-frame tap moves 3.0 px (half a paddle) versus 7.8 px at 0.8, which is what made deliberate zone aiming possible. Floors: R ≥ 1.0 or a steepest ball is vertically unreachable; paddle must cross 90 px inside a tier-3 flight (61 f) — it does, in 35 f, a 1.75× margin. COM remains 0.08 / 2.5 and still has never been tuned independently |
-| M11a | **Paddle speed is coupled to ball speed** — `paddle_accel` and `paddle_max_speed` scale linearly with `ball_scale`, calibrated at `BALL_CAL = 1.4`, holding R and T invariant at any ball speed. This is a *tuning* device: it keys off `ball_scale`, **not** off the rally tier, and is inert (`pd_k() == 1`) at the default. Deliberately not tier-reactive — tier changes only horizontal speed, so the ball's vertical speed and therefore the paddle's tracking requirement are identical at every tier; coupling to tier would cancel the difficulty ramp. **Gotcha for whoever folds 1.4 into `BALL_SPEEDS`:** `BALL_CAL` must become 1 at the same time or the paddle silently drops to 2.14 / 0.21 |
-| M11a | **`phosphor_mode` is now a boolean, resolving the M7b row above.** The `ball` (discrete 2-dot trail) mode and its per-ball trail state are deleted; `full` is the only mode. Tech Design's three-state `off`/`ball`/`full` axis becomes `on`/`off` |
-| M11a | **Phosphor requires `palt(0, false)`.** The full-frame blit is `sspr`, and colour 0 is transparent to sprite drawing by default, so every background pixel of the blit was a no-op and the screen was never actually cleared — PICO-8's boot console text persisted under the playfield indefinitely. Set once at init, alongside `memset(0x0000, 0, 0x2000)` to stop the `__gfx__` data flashing on frame 0. Belongs in Tech Design's *Visual treatment* table next to the `pal()` reset hazard, as the same class of trap. Note `cls()` is **not** the fix: it costs 2,052 cycles/frame to clear pixels the blit then overwrites anyway |
-| M11a | **Nickname UI implemented (#31), with one open design question.** Small text, rows 1–5 (above `miny = 6`, so no paddle can reach it), x = 8 and x = 108, exact mirror about the net, inside the scanline band. Game Design says *"text in the upper screen corners"* (plural) and *"COM's own displayed name never changes"*, which was read as **both** labels present — `COM` left, nickname right. That reading is an inference and Game Design should state it outright either way. Denial correctly shows neither, preserving the reveal |
-| M11a | **The completion badge replaces every AI-assigned nickname retroactively.** Once `completion_name` exists, it is shown in place of DUM/SKR/WHR/PLR on replays of every act. Game Design's Resolution section says the custom name replaces the AI-assigned ones but is ambiguous about whether that applies only to Acceptance's own PLR or to all acts on subsequent runs; the cart now does the latter. Badge label is `HIGHSCORE`, no colon |
-| M11a | **Narrative convention: `win_section` means the *player* wins.** Denial's two branches were wired to the opposite triggers — COM's boast played when the player won and COM's "thats not possible" when the player lost. The authored lines were correct; only the wiring was inverted. Tech Design should state the convention explicitly, since `stage:resolve(w)` takes the raw winner id (`2` = player) and the naming is the only thing carrying the meaning |
-| M11a | **Debug scaffolding added, extends the M7a/M7b strip-list.** `DEBUG_KEYS` (`c` = player win, `v` = player loss, `[` / `]` step `ball_scale`) and `DEBUG_AI` (COM plays from the first serve, bypassing Denial's 2-point arming and its score reset). Both are single-flag kills. **Both stay `true` through Alpha by decision** — they are worth more for playtesting than the risk they carry, and `DEBUG_AI` in particular is what makes Denial playable before M12 builds its real arming logic |
-| M11a | **⚠ File a GitHub issue at the docs pass to track debug-flag removal.** `DEBUG_KEYS` calls `poke(0x5f2d, 1)`, enabling devkit keyboard — this shows a warning banner to BBS players and does not exist on handheld or mobile targets, which CLAUDE.md's PICO-8 rules otherwise forbid outright. Deliberately left on for now (see row above), so it needs a tracked issue rather than a comment, or it ships by default. The issue should cover `DEBUG_KEYS`, `DEBUG_AI`, the pause-menu act selector (`DEBUG_ACT` itself was deleted in M11b), the `cpu` / paddle-tuning menu items, `ACT_CONFIGS[6]` — the swarm stress config, now unreachable from the menu — and `draw_debug()` as one sweep, and should state the ship-blocking one explicitly: **`poke(0x5f2d, 1)` must be gone from a release build** |
-| M9 | **Parking Lot addition:** surface the "press any button to start" prompt through the CLI terminal band rather than as text over the playfield. Attract is meant to look like an unattended machine, so nothing should overlay the field — but the affordance still needs to exist somewhere, and the terminal is where the machine already speaks |
-| M9 | Attract currently rides on the legacy `menu` state. M10's state collapse should make it a real `attract` state. Note that `game_manager:input` contained an always-true condition (`state == menu or states.intermission` — the second operand was a bare constant, not a comparison), which meant *any* start press reloaded the level from *any* state. Dormant while only ❎ triggered it; M9's any-button rule exposed it |
-| M8 | `win_score` / `sudden_death` are plumbed and set `pong.winner`, but nothing acts on it — win/lose transitions live in `game_manager`'s states, deferred to M10 |
-| M8 | `ball_mode`'s `slow_fast` and `homing` are minimal working implementations so the axis is real rather than a stub. Depression (M15) owns tuning them |
+| — | — |
 
----
 
 ## Known bugs
 
@@ -476,15 +454,14 @@ from commit messages.
 
 ---
 
-## Open items flagged but not decided
+## Open items
 
-- **Depression contrast — already resolved, noted so it doesn't get reopened.** An
-  earlier draft paired the ball with a low-contrast color against Depression's dark
-  blue background (`1`), which would have been the worst pairing in the game in the act
-  designed to be the easiest. The wiki settles it: **ball white (`7`)**. Issue #29 still
-  says purple (`13`). Build from the wiki.
-- **Timer calibration.** "Short / Med / Long" have no second values yet. The directional
-  target is a ~20 minute clean playthrough, leaning shorter. Needs playtesting.
-- **Paddle acceleration curve and max speed** — playtest values, not derived.
-- **Anger swarm ball count.** The 40-ball figure in the resource budget is a worst-case
-  estimate, not a design decision.
+Tracked as GitHub issues rather than here, so they don't rot in a table:
+
+- Timer calibration — `T_SHORT`/`T_MED`/`T_LONG` are 45/90/180 frames against a ~20 minute
+  clean playthrough target, and have never been tuned against real dialogue.
+- Debug scaffolding strip sweep, including the ship-blocking `poke(0x5f2d, 1)`.
+- `com_serves_every_point` serves toward COM; the design says toward the player.
+- Anger's swarm ball count — 40 is a stress figure, not a design decision.
+- Depression's `ball_mode` tuning: `slow_fast` and `homing` are minimal implementations.
+- Stale issue triage, and the class diagram (#35).

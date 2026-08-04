@@ -1,6 +1,7 @@
 # Handoff — M12–M16, the five acts
 
-**Start here for the next build session.** Read `CLAUDE.md` and `docs/BUILD-PLAN.md`
+**Start here for the next build session.** Read `CLAUDE.md`, the
+[wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong) and `docs/BUILD-PLAN.md`
 first; this file covers what those don't — where the engine actually stands and how an act
 gets assembled now that it exists.
 
@@ -11,14 +12,14 @@ gets assembled now that it exists.
 **All eleven pre-act milestones are done (M0–M11).** The engine is finished. M12–M16 are
 configuration, a per-act state machine, and dialogue.
 
-**Cart: ~30,400 of 65,535 characters (46%)** — roughly **35k left**, shared between the
+**Cart: ~33,500 of 65,535 characters (51%)** — roughly **32k left**, shared between the
 five acts' code and every line COM speaks. That is the binding constraint and it is why
 the engine was kept small.
 
-**Measured performance:** ~24% of frame in normal play with full phosphor; 40% with full
-phosphor plus a 40-ball swarm. Both comfortably inside budget.
+**Measured performance:** ~24% of frame in normal play with phosphor on; 40% with phosphor
+plus a 40-ball swarm. Both comfortably inside budget.
 
-**Branch state:** everything through M11 is on `m10c-terminal`, pending a single merge.
+**Branch state:** everything through M11b is merged to `master`.
 
 ---
 
@@ -47,13 +48,14 @@ An act is three things.
 what differs. Index 1 = COM, index 2 = player, matching `hud.p1`/`p2`.
 
 ```lua
-{palette=2, phosphor_mode=2, speed_tier_pin=3, scoring_model="intercept"}
+{palette=2, nickname="dum", speed_tier_pin=3, scoring_model="intercept"}
 ```
 
 Available: `paddle_height`, `paddle_accel`, `paddle_max_speed`, `ball_count`, `ball_mode`,
 `ball_mode_pool`, `speed_tier_pin`, `win_score`, `sudden_death`, `scoring_model`,
 `score_multiplier_com`, `initial_score_com`, `scoring_enabled`, `com_serves_every_point`,
-`ai_enabled`, `ai_mode`, `ai_tier`, `palette`, `phosphor_mode`, `nickname`.
+`ai_enabled`, `ai_mode`, `ai_tier`, `palette`, `phosphor_mode` (boolean), `nickname`,
+`cli_rate`. Per-side axes are `{com, player}` tables; `win_score` is one of them.
 
 **If an act needs behavior no axis expresses, add an axis — do not special-case the
 engine.** That rule is why the engine is still one engine.
@@ -105,9 +107,16 @@ end
 
 ### Testing an act without playing to it
 
-Pause menu → **`act`** cycles `auto → 1..6`, reconfiguring and restarting immediately.
-Entry 6 is the 40-ball budget test. Pause → **`result:`** forces a win (press) or a loss
-(press left), which is how the win/lose branches and the whole progression were verified.
+Pause menu → **`act`** steps 1..5 with left/right. It is real navigation, not a
+reconfigure: it sets `gm.level_index`, **writes the checkpoint**, clears the band and loads
+the level, so act, palette, dialogue and save state all move together — and it therefore
+overwrites real progress. `ACT_CONFIGS[6]`, the 40-ball stress config, is no longer
+reachable from it.
+
+`DEBUG_KEYS` gives `c` = player win and `v` = player loss, which is how the win/lose
+branches and the whole progression were verified, plus `[` / `]` to step `ball_scale` live.
+`DEBUG_AI` makes COM play from the first serve, bypassing Denial's 2-point arming — turn it
+off when you build M12's real arming logic.
 
 ---
 
@@ -121,9 +130,10 @@ Entry 6 is the 40-ball budget test. Pause → **`result:`** forces a win (press)
 | M15 | **Depression** | Nickname **WHR**. Asymmetric win (player 5 / COM 11), `ball_mode_pool` = `slow_fast` + `homing` drawn per serve, on player reaching 5 both `scoring_enabled` and `ai_enabled` go false while closing dialogue runs |
 | M16 | **Acceptance** | Nickname **PLR** until the win. `ai_mode = fixed` — the only act that uses it. Minimal dialogue. Win → name entry → badge replaces every AI-assigned nickname |
 
-**Nickname UI does not exist yet.** `nickname` is a config axis that is stored and never
-drawn. Tech Design says text in the upper screen corners from Anger onward. M13 owns
-building it.
+**Nickname UI is built** (M11a): `com` at x = 8 and the act's nickname at x = 108, both at
+y = 1, drawn in `level` only and only when the act sets a nickname — so Denial shows
+neither. A stored completion name replaces the AI-assigned nickname on every act. M13 only
+has to set `nickname = "dum"`.
 
 ---
 
@@ -132,9 +142,12 @@ building it.
 - **Dialogue is author-written.** Build the machinery, leave the slots empty. Structural
   placeholders (`line 1`) are fine as a harness; anything reading as finished game text is
   not. Same for audio and art. See `CLAUDE.md` → *Assets are human-created*.
-- **Docs are frozen.** `docs/game-design.md`, `docs/tech-design.md`,
-  `docs/reference-materials.md` and the wiki must not be edited. Record design outcomes in
-  `DEVLOG.md` and the deferred table in `docs/BUILD-PLAN.md`. See `handoffs/docs-pass.md`.
+- **The wiki is the only design doc.** The three repo mirrors were deleted at the
+  2026-08-03 docs pass; read
+  [the wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong) directly. The freeze is
+  lifted, but it records **settled decisions and shipped implementation only** — park
+  anything undecided in a GitHub issue, and record build status in `DEVLOG.md` and
+  `docs/BUILD-PLAN.md`.
 - **`ball_mode`'s `slow_fast` and `homing` are minimal implementations** so the axis is
   real rather than a stub. M15 owns tuning them and may change their semantics.
 - **COM's paddle response has never been tuned** independently of the player's — it sits at
