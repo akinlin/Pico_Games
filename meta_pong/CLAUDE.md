@@ -147,8 +147,14 @@ dead code — see issue #54.)
 
 **The milestone loop.** Sync → read the issue and the wiki sections it names, *before*
 writing code → implement → hand over a verify block → the user launches the cart and
-reports back → iterate → strip debug scaffolding → commit → update or close the issue.
-**Each milestone is a GitHub issue**; there is no plan file. M12–M16 are #60–#64.
+reports back → iterate → strip debug scaffolding → **measure compressed size** → commit →
+update or close the issue. **Each milestone is a GitHub issue**; there is no plan file.
+M12–M16 are #60–#64.
+
+**Record the compressed figure at every milestone close**, in the commit message and in the
+wiki's resource table. The point is a visible slope rather than a discovery at export time:
+the number moved from unmeasured to 76% used in a single session, and the character count
+gave no warning at any point.
 
 **Git workflow.** Conventional-commit style subject lines, reference the issue number.
 The repository uses a **branch per cart** — all Meta Pong work happens on the
@@ -212,13 +218,35 @@ into `term:update()` and is deliberately empty, awaiting a human-authored sound.
 
 ## Hard constraints
 
+**Meta Pong is going to the BBS.** That is a settled decision, and it makes the
+**compressed** ceiling the real one — the BBS distributes carts as `.p8.png`, so the
+compressed limit is enforced on the only build that matters.
+
 | Budget | Ceiling | Reality |
 |---|---|---|
-| Characters | 65,535 | **The binding constraint.** Shared between engine code and every line COM speaks. Engine bloat directly costs dialogue. |
+| **Compressed code** | **15,616 bytes** | **The binding constraint.** 11,801 used at 2026-08-04 (75.6%), of which the engine alone is 10,834. Enforced on `.p8.png` / `.p8.rom`, which is the release format. |
+| Characters | 65,535 | Not binding, and **actively misleading** — it read as 28,413 spare on the same day compressed was 76% gone. Still the ceiling for a plain `.p8`. |
 | Tokens | 8,192 | A whole string literal is 1 token, so dialogue is nearly free here. |
 | CPU | 139,810 cycles/frame at 60fps | Never binds. Worst measured case is 40%. |
-| Compressed code | 15,360 bytes | Only enforced for `.p8.png` / `.p8.rom` export. |
 | Sprites / SFX / music | 256 / 64 / 64 | Not close to binding. |
+
+**Measure compressed size headlessly; do not estimate it.**
+
+```bash
+pico8 meta_pong.p8 -export meta_pong.p8.rom
+```
+
+The `.p8.rom` is exactly 32,768 bytes. Code lives at `0x4300` behind a PXA header —
+`\x00pxa`, two bytes of decompressed length, then two bytes of **compressed** length.
+`0x8000 - 0x4300 = 15,616` is the real ceiling, not the 15,360 quoted in older notes.
+Fifteen seconds per measurement. **Delete the `.rom` afterwards** — it lands in the cart
+folder and is not repo content.
+
+**Prose costs more than code, per character.** Measured marginally by stripping each and
+re-exporting: engine code **0.26** compressed bytes per raw character, dialogue prose
+**0.62**. Code back-references well and English does not, so cutting a thousand characters
+of engine buys only about four hundred characters of COM. Shrinking the engine is worth
+doing (#70) but the leverage is well under 1:1 — do not assume otherwise.
 
 Measured frame cost, not estimated: **~24%** in normal single-ball play with phosphor on;
 **12%** for 40 balls at tier 3 with phosphor off; **40%** for both together. The 40-ball
