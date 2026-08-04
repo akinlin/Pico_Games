@@ -15,7 +15,7 @@ This README covers the repository itself: how it is laid out and how work moves 
 ```
 .
 ├── meta_pong/      a Pong clone with a narrative AI
-├── possessor/      possession-mechanic prototype
+├── possessor/      early prototype — actors, animation, tilemap
 ├── libs/           reusable Lua shared across carts
 ├── docs/           documentation covering the whole repository
 └── README.md
