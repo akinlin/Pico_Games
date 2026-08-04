@@ -139,7 +139,7 @@ ACT_CONFIGS = {
  {palette=2, phosphor_mode=true, nickname="dum"},
  {palette=3, phosphor_mode=true, nickname="skr"},
  {palette=4, phosphor_mode=true, nickname="whr"},
- {palette=5, phosphor_mode=true, nickname="plr"},
+ {palette=5, phosphor_mode=true, nickname="plr", ai_whiff=0},
  {palette=1, phosphor_mode=false, ball_count=40, speed_tier_pin=3, ai_enabled=true}
 }
 
@@ -238,11 +238,13 @@ function init_menu()
     end)
     menuitem(4,"<accel "..ACCELS[accel_i]..">",function(b)
         accel_i = menu_step(accel_i,ACCELS,b)
+        p.cfg.paddle_accel[2] = ACCELS[accel_i]
         init_menu()
         return true
     end)
     menuitem(5,"<max spd "..MAXSPDS[maxspd_i]..">",function(b)
         maxspd_i = menu_step(maxspd_i,MAXSPDS,b)
+        p.cfg.paddle_max_speed[2] = MAXSPDS[maxspd_i]
         init_menu()
         return true
     end)
@@ -610,7 +612,6 @@ end
 -->8
 AI_DELAY = 48
 AI_ERR = 30
-AI_WHIFF = 0.05
 AI_WHIFF_OFF = 10
 
 DEFAULT_CFG = {
@@ -633,6 +634,7 @@ DEFAULT_CFG = {
  com_serves_every_point=false,
  serve_random=false,
  ai_enabled=true,
+ ai_whiff=0.05,
  palette=1,
  phosphor_mode=true,
  nickname=nil
@@ -649,9 +651,15 @@ end
 
 function pong:configure(cfg)
     local c = {}
-    for k,v in pairs(DEFAULT_CFG) do c[k] = v end
-    if cfg then
-        for k,v in pairs(cfg) do c[k] = v end
+    for src in all({DEFAULT_CFG,cfg}) do
+        for k,v in pairs(src) do
+            if type(v) == "table" then
+                local t = {}
+                for i,x in pairs(v) do t[i] = x end
+                v = t
+            end
+            c[k] = v
+        end
     end
     self.cfg = c
     tb.rate = c.cli_rate or TB_REVEAL
@@ -778,8 +786,8 @@ function pong:move_paddle(p,d)
         if (p.dir != d) p.v = 0
         p.dir = d
         local s,k = p.side,pd_k()
-        local ac = (s == 2 and ACCELS[accel_i] or self.cfg.paddle_accel[s]) * k
-        local mx = (s == 2 and MAXSPDS[maxspd_i] or self.cfg.paddle_max_speed[s]) * k
+        local ac = self.cfg.paddle_accel[s] * k
+        local mx = self.cfg.paddle_max_speed[s] * k
         p.v = min(p.v + ac, mx)
         p.y += p.v * d
     end
@@ -1114,7 +1122,7 @@ function pong:predict(b)
         pr.since += 1
         return
     end
-    if (not pr) player1.whiff = rnd() < AI_WHIFF and AI_WHIFF_OFF * coin_flip() or 0
+    if (not pr) player1.whiff = rnd() < self.cfg.ai_whiff and AI_WHIFF_OFF * coin_flip() or 0
 
     local face = player1.x + player1.width + b.radius
     local y = b.y + b.dy * ((face - b.x) / b.dx)
