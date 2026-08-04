@@ -18,7 +18,6 @@ function bvz(z)
     return BALL_VZONES[z] * ball_scale
 end
 
-BALL_ZONE_SIZE = 0.75
 SERVE_DELAY = 102
 SERVE_X = 66
 RESOLVE_DELAY = 120
@@ -934,8 +933,8 @@ function pong:speed_tier(hits)
     return 1
 end
 
-function pong.contact_zone(cy, py)
-    return mid(1, flr((cy - py) / BALL_ZONE_SIZE) + 1, 8)
+function pong.contact_zone(cy, py, ph)
+    return mid(1, flr((cy - py) / (ph / 8)) + 1, 8)
 end
 
 function pong:update_ball(b)
@@ -1004,7 +1003,7 @@ function pong:update_ball(b)
         if (b.mode == "slow_fast") ti = ndx > 0 and 1 or 3
         local spd = bspd(ti)
         if (ndx < 0) then ndx = -spd else ndx = spd end
-        ndy = bvz(pong.contact_zone(pt.y, hitwall.y))
+        ndy = bvz(pong.contact_zone(pt.y, hitwall.y, hitwall.height))
         if (self.cfg.scoring_model == "intercept" and hitwall == player2) self.pending = b
         self:snd(SND_HIT)
         player1.collsionpt = nil
