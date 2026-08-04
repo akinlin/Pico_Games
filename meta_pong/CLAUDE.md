@@ -105,6 +105,16 @@ loads Denial's Intro, which sets `ai_enabled = false`, so force it back on or CO
 never moves; and PICO-8 numbers cap at 32767, so a frame guard of 300000 silently wraps
 negative and the loop never runs.
 
+**In Anger's swarm, group size is the only knob that matters.** M13 swept it against a
+perfect auto-player. At **four** balls per group the player loses no matter what else
+moves: widening the gap from 24 to 72 frames, raising paddle max speed from 4 to 8, pad
+from 2 to 4, and collidable height from 8 to 12 all left the result at 0–1 wins in 4, with
+the score pinned near 22–22. One paddle cannot cover four simultaneous heights, and no
+amount of speed or reach buys a second position. At **two** per group the same player wins
+7 for 7. Three is the boundary — winnable only with an invisible paddle buff, and then only
+by about two points. **Do not try to tune the swarm with the gap or the paddle; change the
+group size.**
+
 **The harness copy must override `CD_ID`.** `cartdata` is keyed by name, not by cart file,
 so a scratchpad copy writes to the *same* save file as the real cart. A harness that calls
 `cd_save_name()` or completes an act leaves a checkpoint and a name behind, and the next
@@ -157,9 +167,17 @@ the number moved from unmeasured to 76% used in a single session, and the charac
 gave no warning at any point.
 
 **Git workflow.** Conventional-commit style subject lines, reference the issue number.
-The repository uses a **branch per cart** — all Meta Pong work happens on the
-`meta_pong` branch, which lands on `main` through a pull request. Milestones are commits
-on that branch, not branches of their own. The four steps, in order:
+The repository uses a **branch per cart** — all Meta Pong work lives on the `meta_pong`
+branch, which lands on `main` through a pull request — and, since M13, a **branch per
+milestone** beneath it: cut `m<n>-<name>` from `meta_pong`, and merge it back into
+`meta_pong` by pull request. `meta_pong` → `main` stays a separate PR.
+
+The milestone branch exists to keep the flow workable with more than one contributor
+without being heavy for one. It is **not** a licence to open a second branch mid-milestone:
+every push in a unit of work still goes to the same branch, because the user decides at
+merge time whether to squash and that choice needs the whole history in one place.
+
+The five steps, in order:
 
 1. **Sync first.** The remote is `pico` (`github.com/akinlin/Pico_Games`) and the default
    branch is **`main`** — renamed from `master` on 2026-08-03.
@@ -169,16 +187,16 @@ on that branch, not branches of their own. The four steps, in order:
    git checkout meta_pong && git merge main
    ```
 
-2. **Work on `meta_pong`.** Never commit to `main`.
-3. **Commit locally as progress is made** — don't save everything for one commit at the
+2. **Cut the milestone branch.** `git checkout -b m13-anger meta_pong`. Flat name — **not**
+   `meta_pong/m13-anger`, because git cannot hold both a `meta_pong` branch and a
+   `meta_pong/` ref namespace.
+3. **Never commit to `main`,** and never to `meta_pong` directly once a milestone branch
+   is open.
+4. **Commit locally as progress is made** — don't save everything for one commit at the
    end. Local commits are free and need no permission.
-4. **Ask before pushing.** When the work reaches a point worth publishing, say so and
+5. **Ask before pushing.** When the work reaches a point worth publishing, say so and
    **wait for an explicit go-ahead**. Pushing is the outward-facing step and is the user's
    call every time; a go-ahead for one push does not authorize the next.
-
-**Every push in a unit of work goes to the same branch.** Do not open a second branch
-partway through — the user decides at merge time whether to squash, and that choice needs
-the whole history in one place.
 
 **The user owns PRs and merges.** Do not open, update, or merge a pull request, and do not
 offer to. Stop at the pushed branch and hand back.
@@ -224,7 +242,7 @@ compressed limit is enforced on the only build that matters.
 
 | Budget | Ceiling | Reality |
 |---|---|---|
-| **Compressed code** | **15,616 bytes** | **The binding constraint.** 11,801 used at 2026-08-04 (75.6%), of which the engine alone is 10,834. Enforced on `.p8.png` / `.p8.rom`, which is the release format. |
+| **Compressed code** | **15,616 bytes** | **The binding constraint.** 12,745 used at M13 close, 2026-08-04 (**81.6%**), up from 11,801 (75.6%) at M12. Enforced on `.p8.png` / `.p8.rom`, which is the release format. **2,871 bytes remain for three acts and every real line of dialogue** — Anger's placeholders will be replaced by longer prose, so the slope is worse than it looks. See #70. |
 | Characters | 65,535 | Not binding, and **actively misleading** — it read as 28,413 spare on the same day compressed was 76% gone. Still the ceiling for a plain `.p8`. |
 | Tokens | 8,192 | A whole string literal is 1 token, so dialogue is nearly free here. |
 | CPU | 139,810 cycles/frame at 60fps | Never binds. Worst measured case is 40%. |
@@ -250,7 +268,9 @@ doing (#70) but the leverage is well under 1:1 — do not assume otherwise.
 
 Measured frame cost, not estimated: **~24%** in normal single-ball play with phosphor on;
 **12%** for 40 balls at tier 3 with phosphor off; **40%** for both together. The 40-ball
-figure is a stress configuration, not a decision about swarm size. Note the cycles-per-frame
+figure **stopped being a stress configuration at M13** — Anger's Test 3 throws exactly 40,
+with phosphor on, so 40% is now the game's shipped worst case rather than a hypothetical.
+Only about 8 are in flight at once, so the true peak is lower. Note the cycles-per-frame
 convention (2²³ ÷ 60) is the community reading of the manual's "8 MHz virtual CPU," not a
 figure the manual states.
 
@@ -468,6 +488,13 @@ Two axes whose values are easy to under-specify:
   very slowly then rebounds fast off the player's paddle), `homing` (ball actively
   seeks toward the player's paddle). `ball_mode_pool` holds the set Depression draws
   from, one per serve.
+- **`serve_model`** — `replica` (a scored ball re-serves from x = 66 after
+  `SERVE_DELAY`) or `launch` (Anger). Under `launch` a scored ball is **deleted** rather
+  than re-served, `ball_count` is 0 so the act opens with an empty field, and balls enter
+  only through `pong:launch(y)`, which spawns them at COM's paddle face travelling right
+  at the pinned tier. The *schedule* — how many, in what groups, how far apart — is
+  deliberately **not** a config axis: it varies per test, not per act, so Anger's
+  `machine()` owns it.
 - **`nickname`** — none in Denial, then **DUM** (Anger), **SKR** (Bargaining),
   **WHR** (Depression), **PLR** (Acceptance). All three characters long, which is why
   name entry is three characters. COM's own displayed name never changes.
@@ -518,36 +545,55 @@ override only what differs. Per-side axes are `{com, player}` tables — index 1
 index 2 the player, matching `hud.p1`/`p2`.
 
 ```lua
-{palette=2, nickname="dum", speed_tier_pin=3, scoring_model="intercept"}
+{palette=2, phosphor_mode=true, nickname="dum",
+ speed_tier_pin=3, scoring_model="intercept", serve_model="launch",
+ ball_count=0, ai_enabled=false, win_score={45,45},
+ paddle_accel={0.3,0.4}, paddle_max_speed={4,4}}
 ```
+
+That is Anger's real entry, and `win_score={45,45}` is deliberately unreachable: the act
+throws 44 balls, each worth exactly one point, so **Anger does not race to a number** —
+its `machine()` sets `p.winner` from the higher score once the last ball resolves. Keeping
+the tally in the act rather than adding a `win_model` axis is the cheaper of the two, since
+no other act would ever use it.
 
 **2. A stage.**
 
 ```lua
-local anger = stage:new("anger")
-stages[2] = anger
+local barg = stage:new("bargaining")
+stages[3] = barg
 
-anger:section({
+barg:section({
     "a line on the default hold",
     {"a line that needs to breathe", T_LONG}
 })
 
-anger:pool({"a timed non-sequitur"})
+barg:section({"a section that waits for the game"}, true)
 
-anger.win_section  = anger:branch({"..."})
-anger.lose_section = anger:branch({"..."})
+barg:pool({"a timed non-sequitur"})
+
+barg.win_section  = barg:branch({"..."})
+barg.lose_section = barg:branch({"..."})
 ```
 
 A line is a bare string, or `{text, duration}` where it needs a hold other than
 `T_SHORT`. `pool()` registers a section that fires at random on a recurring timer whenever
-the stage has nothing else to say; `stage.idle` covers both that resting state and the
-gate before a stage's opening game event.
+the stage has nothing else to say; `stage.idle` covers that resting state, the gate before
+a stage's opening game event, **and the gate at the end of a `hold` section**.
 
 `section()` extends the normal flow. `branch()` appends a section **outside** it, reachable
-only when the match resolves — an ending cannot be walked into. `stage:goto_section(i)`
+only by an explicit jump — an ending cannot be walked into. `stage:goto_section(i)`
 switches content mid-print, pushing the partial line into scrollback; that is how a game
 event interrupts a line. `on_complete` fires when a stage finishes, and the act transition
 waits on the win/lose branch, so COM gets the last word before the game advances.
+
+**The second argument to `section()` and `branch()` is `hold`.** A hold section parks into
+`idle` when its last line's duration expires instead of advancing, and only a
+`goto_section()` from the stage's `machine()` gets it moving again. That is the whole of
+Anger's dialogue gating: it never advances on a timer between tests, so a ball cannot fire
+before COM has finished telling the player what is about to happen. Denial uses no hold
+sections at all — its dialogue runs continuously in the background of a live match, which
+is the other of the two patterns.
 
 **3. A `machine()` hook.** Runs every frame before line advance and can watch anything.
 `init()` is called by `stage:reset()` on every act load, so per-act state starts clean.
@@ -711,7 +757,7 @@ Issues are where all work and all status live. The open ones:
 | **#35** | Refresh the class diagram — the last artefact still predating the M0–M11b object model |
 | **#54** | Strip debug scaffolding and dead code. Holds the **one ship-blocker** (`poke(0x5f2d, 1)`), and the reason the player's paddle config axes are currently dead |
 | **#55** | `com_serves_every_point` serves toward COM, not the player. Fix lands in #62 |
-| **#56** | Playtest tuning: dialogue timers, swarm count, Depression's ball modes, COM's paddle |
+| **#56** | Playtest tuning: dialogue timers, Depression's ball modes, COM's paddle, and **Anger's swarm cadence** — the count is settled at 40, the group size and gap are not |
 | **#57** | Console band colours inside an act are placeholder |
 | **#58** | Parking Lot — design ideas kept but not scheduled |
 | **#60–#64** | The five acts: Intro + Denial, Anger, Bargaining, Depression, Acceptance |
