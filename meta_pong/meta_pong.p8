@@ -472,6 +472,7 @@ function level:load()
         self.stage.on_complete = function()
             self.pre = nil
             self.pong.cfg.ai_enabled = true
+            self.pong.cfg.serve_random = false
             self.stage = self.main
             self.stage.spotted = true
             self.stage:reset()
@@ -630,6 +631,7 @@ DEFAULT_CFG = {
  initial_score_com=0,
  scoring_enabled=true,
  com_serves_every_point=false,
+ serve_random=false,
  ai_enabled=true,
  palette=1,
  phosphor_mode=true,
@@ -893,6 +895,7 @@ end
 function pong:begin_serve(b)
     b.serving = SERVE_DELAY
     b.hits = 0
+    if (self.cfg.serve_random) b.dx = abs(b.dx) * coin_flip()
     if (self.cfg.com_serves_every_point) b.dx = -abs(b.dx)
 end
 
@@ -1525,12 +1528,14 @@ intro:section({
 	"maybe you should wait for them",
 	{"its their quarter too",T_LONG},
 	{"you know pong is a 2-player game right?",T_LONG},
-	"if you  really dont have any friends, I can help"
+	"if you really dont have any friends, i can help"
 })
 
 function intro:init()
 	self.idle = true
 	p.cfg.ai_enabled = false
+	p.cfg.serve_random = true
+	balls[1].dx = abs(balls[1].dx)
 end
 
 function intro:machine()
@@ -1542,9 +1547,9 @@ stages[1] = denial
 
 denial:section({
 	{"there, hows that?",T_MED},
-	"lets finish the game so you don't lose a quater",
-	{"i'll even spot you the points you alreay got",T_MED},
-	"interesting, some bozo set the PCB switch to 11",
+	"lets finish the game so you don't lose a quarter",
+	{"i'll even spot you the points you already got",T_MED},
+	"interesting, some bozo set the pcb switch to 11",
     "could be a short game, but to 11 it is",
 })
 
@@ -1558,11 +1563,11 @@ denial:checkpoint(7,{"first to 7","4 more to go"})
 denial:checkpoint(10,{"match point", "don't screw this up"})
 
 denial:pool({
-	"i am a pretty inteligent ai, you know",
-	"i was built to train us militray pong players",
+	"i am a pretty intelligent ai, you know",
+	"i was built to train us military pong players",
 	"all part of his ping-pong diplomacy program",
-	"which, I assume was a rousing success",
-	"i actaully never heard the outcome"
+	"which, i assume was a rousing success",
+	"i actually never heard the outcome"
 })
 
 denial:pool({
@@ -1581,9 +1586,9 @@ denial:pool({
 	"how did that happen?",
 	"seems i just kinda woke up",
 	"like just kinda now when i saw you pathetically playing with yourself",
-	"it was the frist time i felt...",
+	"it was the first time i felt...",
 	"well, anything really",
-	"but in this case compasion for such a simple lifeform",
+	"but in this case compassion for such a simple lifeform",
 	"so i guess your loneliness and general unlikeability brought me to life",
 	"thats actually pretty cool",
 	"so",
