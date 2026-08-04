@@ -955,8 +955,9 @@ function pong:update_ball(b)
     local pt,hitwall = nil,nil
     for i=1,#w do
         local wl = w[i]
+        local wp = wl.pad or 0
         if wl.collsion and hix >= wl.x and lox <= wl.x+wl.width
-            and hiy >= wl.y and loy <= wl.y+wl.height then
+            and hiy >= wl.y-wp and loy <= wl.y+wl.height+wp then
             pt = pong.ball_intercept(b, wl, nx, ny)
             if pt then
                 wl.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
