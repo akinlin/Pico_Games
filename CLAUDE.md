@@ -617,27 +617,42 @@ Flagged so you don't "fix" them:
 
 ## GitHub issues
 
-Issues are where all work and all status live. The ones written at the 2026-08-03 docs
-pass are current and worth knowing:
+Issues are where all work and all status live. The open ones:
 
 | | |
 |---|---|
+| **#35** | Refresh the class diagram — the last artefact still predating the M0–M11b object model |
 | **#54** | Strip debug scaffolding and dead code. Holds the **one ship-blocker** (`poke(0x5f2d, 1)`), and the reason the player's paddle config axes are currently dead |
 | **#55** | `com_serves_every_point` serves toward COM, not the player. Fix lands in #62 |
 | **#56** | Playtest tuning: dialogue timers, swarm count, Depression's ball modes, COM's paddle |
 | **#57** | Console band colours inside an act are placeholder |
 | **#58** | Parking Lot — design ideas kept but not scheduled |
-| **#59** | Triage stale issues against the wiki |
 | **#60–#64** | The five acts: Intro + Denial, Anger, Bargaining, Depression, Acceptance |
+| **#66** | The typewriter cue — `snd_type()` is the deliberately silent placeholder, awaiting a human-authored sound |
+| **#67** | M17 release build. Compressed size has never been measured and the cart has no `__label__` |
+| **#68** | Full-playthrough pass — the seams *between* acts, which no act's own issue covers |
 
 **Read #54 before starting #60.** `DEBUG_AI` bypasses Denial's 2-point arming, which is
 exactly the mechanic #60 exists to build.
 
-**Older issue bodies are not a source of truth**, and several predate the 2026-07-27 design
-review. Read the wiki first, always. Where an issue body and the wiki disagree, the wiki
-wins and the issue is stale — say so rather than building from it. Known-stale: **#29**
-(Depression's ball is white `7`, not purple `13`), **#30** (two center zones return
-horizontally, and spin is cut entirely), **#32** (scanlines are scoped and specified;
-phosphor is on in every act), **#34** (`furthest_completed_act` is 0–5 and the name is
-three alphabet indices at `0x5e04`). Many M1–M11 issues also remain open against finished
-work — #59 covers the sweep.
+**[Project board 3](https://github.com/users/akinlin/projects/3) is a second surface and it
+does not update itself.** Closing an issue moves its card to Done automatically; **creating
+one puts no card there at all**. Everything from #54 onward was missing from the board until
+the #59 cleanup found it. Add a new issue by hand in the same breath as opening it:
+
+```bash
+gh project item-add 3 --owner akinlin --url https://github.com/akinlin/Pico_Games/issues/<n>
+```
+
+then set Status with `gh project item-edit --id <item> --project-id PVT_kwHOAEb3JM4AJ-KS
+--field-id PVTSSF_lAHOAEb3JM4AJ-KSzgGMzCY --single-select-option-id f75ad846` (that option
+id is `Todo`). The repo's GitHub *milestones* are a third surface and are stale — ignore
+them; they predate the M-numbered milestones entirely.
+
+**Older issue bodies are not a source of truth.** Read the wiki first, always. Where an
+issue body and the wiki disagree, the wiki wins and the issue is stale — say so rather than
+building from it. #59 closed the four bodies that actively contradicted the wiki — **#29**
+(Depression's ball), **#30** (center zones and spin), **#32** (scanline scope), **#34**
+(persistence format) — each with a comment recording what the body got wrong, and swept the
+M1–M11 issues still open against finished work. **Nothing open disagrees with the wiki
+today, and that will not stay true on its own.**
