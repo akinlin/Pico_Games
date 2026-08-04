@@ -18,8 +18,9 @@ function names, git mechanics. Where a technical detail carries the story — th
 having no way to produce spin, or scanlines being physically finer than a pixel we can
 draw — keep the *consequence* and let the implementation go.
 
-Not a spec and not build status: `docs/` is the source of truth, GitHub issues and
-`docs/BUILD-PLAN.md` track status.
+Not a spec and not build status: the
+[wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong) is the source of truth and
+GitHub issues track status. This file and `CLAUDE.md` are the only prose left in the repo.
 
 Entries are roughly chronological. Started 2026-07-27 at the M0 rework. Present
 entries lean engineering-heavy; later passes should correct toward the above.
@@ -51,9 +52,9 @@ interpreter. That caught things longhand would have missed:
 
 Every one of those is a claim we'd otherwise have had to hand over as "should be fine."
 
-**The spec was right more often than the code, but not always.** `docs/` won essentially
-every disagreement — except where the docs disagreed with *themselves*, which happened
-once and mattered a lot (see M6).
+**The spec was right more often than the code, but not always.** The design docs won
+essentially every disagreement — except where they disagreed with *themselves*, which
+happened once and mattered a lot (see M6).
 
 **Small verifiable increments beat big correct ones.** The rhythm that worked: plan
 first, get a ruling on anything ambiguous, implement, run `-x`, hand over a concrete
@@ -90,7 +91,7 @@ The score placement bug is the fun one. Scores overlapped the net at double digi
 the cause was that `\^p` is PICO-8's *pinball* mode — wide + tall + stripey — so each
 glyph is **8 px wide, not 4**. The placement math had assumed 4.
 
-Rather than eyeball a new position, `docs/reference-materials.md` turned out to record
+Rather than eyeball a new position, the reference materials turned out to record
 the original hardware's exact score placement (left score at H 128–191, right at
 H 320–383, symmetric about the net at H 256). Converting at 0.3413 px per clock put the
 score fields 22–44 px either side of the net — a derived answer instead of a guessed one.
@@ -133,8 +134,8 @@ character** limit — which is the binding constraint, shared with every line of
 COM speaks.
 
 Measured: **5,871 characters, 17% of the code and 9% of the entire budget.** Stripped,
-and the cart has carried no comments since; rationale lives in `docs/`, `CLAUDE.md` and
-commit messages instead. The `-->8` tab separators look like comments and are not —
+and the cart has carried no comments since; rationale lives on the wiki, in `CLAUDE.md`
+and in commit messages instead. The `-->8` tab separators look like comments and are not —
 they're structural.
 
 ## M4 — Serve rules
@@ -339,6 +340,30 @@ playing, found a good feel far faster than any amount of reasoning about acceler
 curves. Second, the ability to change that response *situationally* felt good enough
 that it got written down as a possible feature rather than a setting. Some of the best
 ideas arrive disguised as debug tools.
+
+**The other M8 story: the ball that went through the corner of the paddle.** This had been
+on the bug list since long before the rework, filed as one problem. It was two, and they
+had been there for different lengths of time.
+
+The first was a fix that half-worked. The ball *was* being caught at the corner — the code
+noticed, turned it around vertically, and then sent it onward horizontally exactly as
+before, so it sailed through anyway. The detection was never the failure. The response was.
+
+The second had never been detected at all. The paddle's bottom edge was being measured a
+pixel tighter than its top edge — an asymmetry nobody had put there on purpose, sitting
+quietly in code that predates the whole rework. It left a small notch at each bottom
+corner that nothing was watching.
+
+The fix was to stop thinking in faces. A paddle in the original machine doesn't have a top
+and a bottom and a front; the circuit asks whether the ball and the paddle are in the same
+place, and if they are, the ball goes back the other way. Once the code asked the same
+question, corners stopped being a special case — there was no longer any such thing as a
+corner. The most reliable thing we could do turned out to be the thing the 1972 hardware
+was already doing, which happened more than once on this project.
+
+It was confirmed by firing every one of the machine's 42 possible ball trajectories at the
+paddle from outside it and checking all of them landed. Nothing got through. That is not a
+test we could have run by eye in a hundred sessions.
 
 ## M9 — The machine when nobody is watching
 

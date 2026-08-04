@@ -13,31 +13,30 @@ do not touch it.
 
 ## Source of truth
 
-**The design lives in the GitHub wiki, and only there.**
+**There are no design documents in this repo.** Two places hold everything:
 
-- [Meta Pong wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong) — one page, three
+- **[The wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong)** — one page, three
   sections: **Game Design**, **Tech Design**, **Reference Materials**. **Authoritative.**
-- `docs/BUILD-PLAN.md` — ordered milestones and their acceptance criteria. Repo-only.
+- **[GitHub issues](https://github.com/akinlin/Pico_Games/issues)** — all work and all
+  status. Each milestone is an issue; M12–M16 are #60–#64.
 
-The repo mirrors of the wiki (`docs/game-design.md`, `docs/tech-design.md`,
-`docs/reference-materials.md`) were **deleted at the end-of-Alpha docs pass, 2026-08-03**.
-They drifted, and editing a mirror left changes the next sync silently reverted. There is
-no local copy now — read the wiki. It is a git repo if you need one:
+This file and `DEVLOG.md` are the only prose left in the repo, and neither is a spec. The
+wiki mirrors, the build plan and the session handoffs were **deleted at the end-of-Alpha
+docs pass, 2026-08-03** — mirrors drifted, and the plan's finished milestones were history
+that `DEVLOG.md` already tells better. Read the wiki. It is a git repo if you need one
+locally:
 
 ```bash
 git clone https://github.com/akinlin/Pico_Games.wiki.git
 ```
-
-`handoffs/` holds self-contained briefs for work that runs in its own session:
-`acts-m12-m16.md` (the next build session).
 
 Rules that matter:
 
 1. Game Design is upstream of Tech Design. If an implementation detail implies a
    design change, stop and raise it — do not resolve it in code.
 2. **The wiki records settled decisions and shipped implementation only.** Build status,
-   open questions and not-yet-taken ideas live in GitHub issues and `docs/BUILD-PLAN.md`,
-   never on the wiki.
+   open questions and not-yet-taken ideas are issues, never wiki content. If something
+   can't be settled, that is a reason to ask, not to write "TBD" on the wiki.
 3. If code and the wiki disagree, the wiki wins and the code is a bug.
 4. If you believe the wiki is wrong, say so and wait. Do not edit it unless asked.
 
@@ -122,9 +121,14 @@ together. Note `gm:start_level()` **no-ops when already in a level**, so a harne
 spotted.
 
 **Debugging.** `printh()` writes to the host console and is the only real logging
-channel. The existing cart has a `draw_debug()` for collision-point visualization —
-keep that pattern, keep it behind a flag, and strip it before a milestone closes so it
-doesn't eat the character budget.
+channel. Keep debug output behind a flag, and strip it before a milestone closes so it
+doesn't eat the character budget. (`draw_debug()` is the surviving example and is now
+dead code — see issue #54.)
+
+**The milestone loop.** Branch → read the issue and the wiki sections it names, *before*
+writing code → implement → hand over a verify block → the user launches the cart and
+reports back → iterate → strip debug scaffolding → commit → update or close the issue.
+**Each milestone is a GitHub issue**; there is no plan file. M12–M16 are #60–#64.
 
 **Git workflow.** One milestone per branch, conventional-commit style subject lines,
 reference the issue number. The four steps, in order:
@@ -163,7 +167,7 @@ master..pico/master` is the one-line check; run it before trusting a clean `git 
 Three categories of content in this game are authored by the user, never by Claude:
 
 - **Dialogue.** Every line COM speaks. Build the machinery and leave the slots empty —
-  `docs/BUILD-PLAN.md` says the same for M12–M16. Structurally obvious placeholders
+  issues #60–#64 say the same for M12–M16. Structurally obvious placeholders
   (`line 1`, `section 2 line 3`) are fine as a test harness; anything that reads as a
   line of the finished game is not.
 - **Audio.** All sounds and music.
@@ -436,6 +440,70 @@ Two dialogue rules that are easy to violate by accident:
 
 ---
 
+## Building an act
+
+The engine is finished. An act is three things and nothing else.
+
+**1. A config entry.** `ACT_CONFIGS[n]`. Every axis has a default in `DEFAULT_CFG`;
+override only what differs. Per-side axes are `{com, player}` tables — index 1 is COM,
+index 2 the player, matching `hud.p1`/`p2`.
+
+```lua
+{palette=2, nickname="dum", speed_tier_pin=3, scoring_model="intercept"}
+```
+
+**2. A stage.**
+
+```lua
+local anger = stage:new("anger")
+stages[2] = anger
+
+anger:section({
+    line("...", T_LONG),
+    line("...", T_MED)
+})
+
+anger.win_section  = anger:branch({ line("...", T_MED) })
+anger.lose_section = anger:branch({ line("...", T_MED) })
+```
+
+`section()` extends the normal flow. `branch()` appends a section **outside** it, reachable
+only when the match resolves — an ending cannot be walked into. `stage:goto_section(i)`
+switches content mid-print, pushing the partial line into scrollback; that is how a game
+event interrupts a line. `on_complete` fires when a stage finishes, and the act transition
+waits on the win/lose branch, so COM gets the last word before the game advances.
+
+**3. A `machine()` hook.** Runs every frame before line advance and can watch anything.
+`init()` is called by `stage:reset()` on every act load, so per-act state starts clean.
+
+```lua
+function denial:init()
+    self.armed = DEBUG_AI
+end
+
+function denial:machine()
+    if not self.armed and hud.p2_score > 1 then
+        self.armed = true
+        gm.level.pong.cfg.ai_enabled = true
+        hud.p1_score = 0
+        hud.p2_score = 0
+    end
+end
+```
+
+**If an act needs behavior no axis expresses, add an axis — do not special-case the
+engine.** That rule is why there is still one engine.
+
+**Testing an act without playing to it.** Pause menu → `act` steps 1–5 with left/right.
+It is real navigation — it sets `gm.level_index`, **writes the checkpoint**, clears the band
+and loads the level — so it moves act, palette, dialogue and save state together, and it
+destroys real progress. `DEBUG_KEYS` gives `c` = player win and `v` = player loss, which is
+how the win/lose branches were verified, plus `[` / `]` to step `ball_scale` live.
+
+**Every character spent on act code is a character not spent on dialogue.**
+
+---
+
 ## PICO-8 specifics
 
 - **`_update60`, not `_update`.** 60 fps matches the machine's 60.05 Hz field rate, and
@@ -549,12 +617,27 @@ Flagged so you don't "fix" them:
 
 ## GitHub issues
 
-**Issue bodies are not a source of truth and several predate the 2026-07-27 design review.**
-Read the wiki first, always. Where an issue body and the wiki disagree, the wiki wins and
-the issue is stale — say so rather than building from it.
+Issues are where all work and all status live. The ones written at the 2026-08-03 docs
+pass are current and worth knowing:
 
-Known-stale at the 2026-08-03 docs pass: **#29** (Depression's ball is white `7`, not
-purple `13`), **#30** (two center zones return horizontally, and spin is cut entirely),
-**#32** (scanlines are scoped and specified; phosphor is on in every act), **#34**
-(`furthest_completed_act` is 0–5 and the name is three alphabet indices at `0x5e04`).
-Many M1–M11 issues also remain open against finished work.
+| | |
+|---|---|
+| **#54** | Strip debug scaffolding and dead code. Holds the **one ship-blocker** (`poke(0x5f2d, 1)`), and the reason the player's paddle config axes are currently dead |
+| **#55** | `com_serves_every_point` serves toward COM, not the player. Fix lands in #62 |
+| **#56** | Playtest tuning: dialogue timers, swarm count, Depression's ball modes, COM's paddle |
+| **#57** | Console band colours inside an act are placeholder |
+| **#58** | Parking Lot — design ideas kept but not scheduled |
+| **#59** | Triage stale issues against the wiki |
+| **#60–#64** | The five acts: Intro + Denial, Anger, Bargaining, Depression, Acceptance |
+
+**Read #54 before starting #60.** `DEBUG_AI` bypasses Denial's 2-point arming, which is
+exactly the mechanic #60 exists to build.
+
+**Older issue bodies are not a source of truth**, and several predate the 2026-07-27 design
+review. Read the wiki first, always. Where an issue body and the wiki disagree, the wiki
+wins and the issue is stale — say so rather than building from it. Known-stale: **#29**
+(Depression's ball is white `7`, not purple `13`), **#30** (two center zones return
+horizontally, and spin is cut entirely), **#32** (scanlines are scoped and specified;
+phosphor is on in every act), **#34** (`furthest_completed_act` is 0–5 and the name is
+three alphabet indices at `0x5e04`). Many M1–M11 issues also remain open against finished
+work — #59 covers the sweep.
