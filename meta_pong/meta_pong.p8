@@ -6,8 +6,8 @@ __lua__
 PLAYFIELD_BOTTOM = 95
 
 BALL_SPEEDS = {0.341, 0.683, 1.024}
-BALL_HITS_MAX = 20
-BALL_HITS_T2 = 8
+BALL_HITS_MAX = 16
+BALL_HITS_T2 = 6
 BALL_VZONES = {-1.171,-0.780,-0.390,0,0,0.390,0.780,1.171}
 ball_scale = 1.4
 
@@ -607,13 +607,14 @@ function draw_debug()
 end
 
 -->8
-AI_DELAY = 42
-AI_ERR = 25
+AI_DELAY = 48
+AI_ERR = 30
 AI_WHIFF = 0.05
 AI_WHIFF_OFF = 10
 
 DEFAULT_CFG = {
  paddle_height={6,8},
+ paddle_draw={6,6},
  paddle_pad={0,2},
  paddle_catch={0,3},
  paddle_accel={0.08,0.3},
@@ -753,6 +754,13 @@ function pong:make_paddle(x,side)
     p.v = 0
     p.side = side
     p.pad = self.cfg.paddle_pad[side]
+    local dh = self.cfg.paddle_draw[side]
+    if dh < h then
+        local o = (h - dh) / 2
+        p.drawf = function(a)
+            rectfill(a.x,a.y+o,a.x+a.width-1,a.y+o+dh-1,a.color)
+        end
+    end
     p.whiff = 0
     p.miny = h
     p.maxy = (PLAYFIELD_BOTTOM+1) - h - h
