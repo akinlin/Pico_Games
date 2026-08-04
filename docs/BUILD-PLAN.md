@@ -427,11 +427,13 @@ same act with fresh dialogue.
 
 ## Documentation pass — done
 
-**The end-of-Alpha documentation pass ran on 2026-08-03.** Everything the Alpha backlog
-held was folded into the [wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong),
-which is now the single source of truth — the three repo mirrors (`docs/game-design.md`,
-`docs/tech-design.md`, `docs/reference-materials.md`) were deleted in the same pass, and
-`handoffs/docs-pass.md` was retired with it.
+**The end-of-Alpha documentation pass ran on 2026-08-03**, and landed as wiki commit
+**`c4d5f78`** (the previous consistent point was `2e419bc`, through M7b). Everything the
+Alpha backlog held was folded into the
+[wiki](https://github.com/akinlin/Pico_Games/wiki/Meta-Pong), which is now the single
+source of truth — the three repo mirrors (`docs/game-design.md`, `docs/tech-design.md`,
+`docs/reference-materials.md`) were deleted in the same pass, and `handoffs/docs-pass.md`
+was retired with it.
 
 The freeze is lifted. The wiki is editable again, under one standing rule: **it records
 settled decisions and shipped implementation only.** Anything undecided, deferred, or
@@ -456,7 +458,8 @@ from commit messages.
 
 ## Open items
 
-Tracked as GitHub issues rather than here, so they don't rot in a table:
+Cut from the wiki at the docs pass and **not yet filed as issues** — file them before
+starting M12, or they rot here the way the last backlog did:
 
 - Timer calibration — `T_SHORT`/`T_MED`/`T_LONG` are 45/90/180 frames against a ~20 minute
   clean playthrough target, and have never been tuned against real dialogue.
