@@ -238,11 +238,13 @@ function init_menu()
     end)
     menuitem(4,"<accel "..ACCELS[accel_i]..">",function(b)
         accel_i = menu_step(accel_i,ACCELS,b)
+        p.cfg.paddle_accel[2] = ACCELS[accel_i]
         init_menu()
         return true
     end)
     menuitem(5,"<max spd "..MAXSPDS[maxspd_i]..">",function(b)
         maxspd_i = menu_step(maxspd_i,MAXSPDS,b)
+        p.cfg.paddle_max_speed[2] = MAXSPDS[maxspd_i]
         init_menu()
         return true
     end)
@@ -649,9 +651,15 @@ end
 
 function pong:configure(cfg)
     local c = {}
-    for k,v in pairs(DEFAULT_CFG) do c[k] = v end
-    if cfg then
-        for k,v in pairs(cfg) do c[k] = v end
+    for src in all({DEFAULT_CFG,cfg}) do
+        for k,v in pairs(src) do
+            if type(v) == "table" then
+                local t = {}
+                for i,x in pairs(v) do t[i] = x end
+                v = t
+            end
+            c[k] = v
+        end
     end
     self.cfg = c
     tb.rate = c.cli_rate or TB_REVEAL
@@ -778,8 +786,8 @@ function pong:move_paddle(p,d)
         if (p.dir != d) p.v = 0
         p.dir = d
         local s,k = p.side,pd_k()
-        local ac = (s == 2 and ACCELS[accel_i] or self.cfg.paddle_accel[s]) * k
-        local mx = (s == 2 and MAXSPDS[maxspd_i] or self.cfg.paddle_max_speed[s]) * k
+        local ac = self.cfg.paddle_accel[s] * k
+        local mx = self.cfg.paddle_max_speed[s] * k
         p.v = min(p.v + ac, mx)
         p.y += p.v * d
     end
