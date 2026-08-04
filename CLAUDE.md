@@ -96,6 +96,23 @@ output, then hangs rather than returning. Run it backgrounded with the output re
 a log, sleep ~10s, read the log, and kill leftover `pico8` processes afterwards — do not
 wait on the process itself.
 
+**The pause menu is reachable headlessly by overriding `menuitem`.** `init_menu()` calls the
+global, so replacing it before `_init()` captures every item's callback and lets the harness
+invoke it directly with the same bitfield PICO-8 passes (`1` left, `2` right):
+
+```lua
+MENU = {}
+menuitem = function(i,l,f) MENU[i] = {l=l,f=f} end
+_init()
+MENU[1].f(2)
+```
+
+This is how M11b verified that the act selector moves palette, dialogue and checkpoint
+together. Note `gm:start_level()` **no-ops when already in a level**, so a harness that sets
+`gm.level_index` and calls it silently stays on the current act — set the index and call
+`gm.level:load()` instead. That produced a phantom "wrong palette" reading before it was
+spotted.
+
 **Debugging.** `printh()` writes to the host console and is the only real logging
 channel. The existing cart has a `draw_debug()` for collision-point visualization —
 keep that pattern, keep it behind a flag, and strip it before a milestone closes so it
