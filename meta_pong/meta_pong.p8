@@ -615,6 +615,7 @@ AI_WHIFF_OFF = 10
 DEFAULT_CFG = {
  paddle_height={6,6},
  paddle_pad={0,2},
+ paddle_catch={0,3},
  paddle_accel={0.08,0.3},
  paddle_max_speed={2.5,3},
  ball_count=1,
@@ -963,6 +964,21 @@ function pong:update_ball(b)
                 wl.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
                 hitwall = wl
                 break
+            end
+        end
+    end
+
+    if not pt then
+        local pl = nx > 0 and player2 or player1
+        local g = self.cfg.paddle_catch[pl.side]
+        local pdd = pl.pad or 0
+        if g > 0 and pl.collsion
+            and py >= pl.y - pdd - r and py <= pl.y + pl.height + pdd + r then
+            local face = nx > 0 and pl.x - r or pl.x + pl.width + r
+            if nx > 0 and px > face and px <= face + g
+                or nx < 0 and px < face and px >= face - g then
+                pt = {x=face, y=py, d = nx > 0 and "left" or "right"}
+                hitwall = pl
             end
         end
     end
