@@ -6,7 +6,8 @@ __lua__
 PLAYFIELD_BOTTOM = 95
 
 BALL_SPEEDS = {0.341, 0.683, 1.024}
-BALL_HITS_MAX = 12
+BALL_HITS_MAX = 20
+BALL_HITS_T2 = 8
 BALL_VZONES = {-1.171,-0.780,-0.390,0,0,0.390,0.780,1.171}
 ball_scale = 1.4
 
@@ -606,13 +607,13 @@ function draw_debug()
 end
 
 -->8
-AI_DELAY = 24
-AI_ERR = 10
+AI_DELAY = 42
+AI_ERR = 25
 AI_WHIFF = 0.05
 AI_WHIFF_OFF = 10
 
 DEFAULT_CFG = {
- paddle_height={6,6},
+ paddle_height={6,8},
  paddle_pad={0,2},
  paddle_catch={0,3},
  paddle_accel={0.08,0.3},
@@ -929,7 +930,7 @@ end
 function pong:speed_tier(hits)
     if (self.cfg.speed_tier_pin > 0) then return self.cfg.speed_tier_pin end
     if (hits >= BALL_HITS_MAX) then return 3 end
-    if (hits >= 4) then return 2 end
+    if (hits >= BALL_HITS_T2) then return 2 end
     return 1
 end
 
