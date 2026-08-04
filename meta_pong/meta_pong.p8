@@ -107,8 +107,6 @@ C_TRAIL2 = 5
 C_CLI = 6
 C_CLIBG = 7
 
-DEBUG_AI = true
-
 SCORE_Y = 8
 SCORE_H = 12
 BADGE_Y = 2
@@ -373,7 +371,7 @@ function game_manager:update()
 end
 
 function game_manager:check_result()
-    if (self.resolving) return
+    if (self.resolving or self.level.pre) return
     local w = self.level.pong.winner
     if (w == 0) return
     self.resolving = true
@@ -451,9 +449,11 @@ end
 
 level = {}
 level.__index = level
-function level:new(d,tb,p)
+function level:new(d,tb,p,pre)
 	local l = {
+		main=d,
 		stage=d,
+		pre=pre,
 		textbox=tb,
 		pong=p
 	}
@@ -462,11 +462,22 @@ function level:new(d,tb,p)
 end
 
 function level:load()
-    self.stage:reset()
     self.pong:configure(ACT_CONFIGS[mid(1,gm.level_index,#ACT_CONFIGS)])
     self.pong:start_match()
-
     self.pong:set_attract(false)
+
+    self.stage = self.pre or self.main
+    self.stage:reset()
+    if self.pre then
+        self.stage.on_complete = function()
+            self.pre = nil
+            self.pong.cfg.ai_enabled = true
+            self.pong.com_handicap = -hud.p2_score
+            hud.p1_score = 0
+            self.stage = self.main
+            self.stage:reset()
+        end
+    end
 end
 
 function level:input()
@@ -496,7 +507,7 @@ function _init()
 	tb = term:new(0,96)
     p = pong:new()
     p:reset_game()
-	gm:add_level(level:new(stages[1],tb,p))
+	gm:add_level(level:new(stages[1],tb,p,stages[6]))
 	gm:add_level(level:new(stages[2],tb,p))
 	gm:add_level(level:new(stages[3],tb,p))
 	gm:add_level(level:new(stages[4],tb,p))
@@ -619,7 +630,7 @@ DEFAULT_CFG = {
  initial_score_com=0,
  scoring_enabled=true,
  com_serves_every_point=false,
- ai_enabled=false,
+ ai_enabled=true,
  ai_mode="self_balancing",
  ai_tier=AI_TIE_TIER,
  palette=1,
@@ -642,7 +653,6 @@ function pong:configure(cfg)
     if cfg then
         for k,v in pairs(cfg) do c[k] = v end
     end
-    if (DEBUG_AI) c.ai_enabled = true
     self.cfg = c
     tb.rate = c.cli_rate or TB_REVEAL
     self.com_handicap = c.initial_score_com
@@ -853,7 +863,7 @@ function pong:update_game_state()
         end
     end
 
-    if self.cfg.ai_enabled then self:run_ai(balls[1]) end
+    if self.cfg.ai_enabled and not self.attract then self:run_ai(balls[1]) end
 end
 
 function pong:score_point(b,who)
@@ -1308,6 +1318,7 @@ end
 T_SHORT = 45
 T_MED = 90
 T_LONG = 180
+T_POOL = T_MED
 
 stage = {}
 stage.__index = stage
@@ -1316,9 +1327,11 @@ function stage:new(t)
 	local st = {
 		title=t,
 		sections={},
+		pools={},
 		index=1,
 		li=1,
 		said=false,
+		idle=false,
 		t=0,
 		complete=false,
 		machine=nil,
@@ -1330,20 +1343,45 @@ function stage:new(t)
 	return st
 end
 
+function norm(ls)
+	for i=1,#ls do
+		local l = ls[i]
+		if (type(l) == "string") l = {l}
+		l[2] = l[2] or T_SHORT
+		ls[i] = l
+	end
+	return ls
+end
+
 function stage:section(lines)
-	local sec = {lines=lines}
+	local sec = {lines=norm(lines)}
 	add(self.sections,sec)
 	self.flow_end = #self.sections
 	return sec
 end
 
 function stage:branch(lines)
-	add(self.sections,{lines=lines})
+	add(self.sections,{lines=norm(lines)})
 	return #self.sections
 end
 
-function line(text,dur)
-	return {text=text,dur=dur or T_MED}
+function stage:pool(lines)
+	add(self.pools,self:branch(lines))
+	return #self.pools
+end
+
+function stage:rest()
+	self.idle = true
+	self.said = false
+	self.t = 0
+end
+
+function stage:pick_pool()
+	local n = #self.pools
+	local i = flr(rnd(n)) + 1
+	if (n > 1 and i == self.lastp) i = (i % n) + 1
+	self.lastp = i
+	self:goto_section(self.pools[i])
 end
 
 function stage:cur()
@@ -1356,6 +1394,7 @@ function stage:goto_section(i)
 	self.index = i
 	self.li = 1
 	self.said = false
+	self.idle = false
 	self.t = 0
 	self.complete = false
 end
@@ -1376,7 +1415,11 @@ function stage:advance()
 		if self.index > self.flow_end then
 			self.index = self.flow_end
 			self.li = #sec.lines
-			self:finish()
+			if #self.pools > 0 then
+				self:rest()
+			else
+				self:finish()
+			end
 		end
 	end
 end
@@ -1398,6 +1441,8 @@ function stage:reset()
 	self.t = 0
 	self.complete = false
 	self.stop_at_end = false
+	self.idle = false
+	self.lastp = nil
 	self.on_complete = nil
 	if (self.init) self:init()
 end
@@ -1414,11 +1459,18 @@ function stage:update(tb)
 	if (self.machine) self:machine()
 	if (self.complete) return
 
+	if self.idle then
+		if (#self.pools == 0 or not tb:done()) return
+		self.t += 1
+		if (self.t >= T_POOL) self:pick_pool()
+		return
+	end
+
 	local ln = self:cur()
 	if (not ln) return
 
 	if not self.said then
-		tb:say(ln.text)
+		tb:say(ln[1])
 		self.said = true
 		self.t = 0
 		return
@@ -1427,60 +1479,87 @@ function stage:update(tb)
 	if (not tb:done()) return
 
 	self.t += 1
-	if (self.t >= ln.dur) self:advance()
+	if (self.t >= ln[2]) self:advance()
 end
 
 -->8
 stages = {}
 
+INTRO_TRIGGER = 2
+
+local intro = stage:new("intro")
+stages[6] = intro
+
+intro:section({
+	"intro line 1",
+	"intro line 2",
+	"intro line 3",
+	{"intro line 4",T_MED}
+})
+
+function intro:init()
+	self.idle = true
+	p.cfg.ai_enabled = false
+end
+
+function intro:machine()
+	hud.p1_score = 0
+	if (self.idle and hud.p2_score >= INTRO_TRIGGER) self:goto_section(1)
+end
+
 local denial = stage:new("denial")
 stages[1] = denial
 
 denial:section({
-	line("hello!?",T_LONG)
+	"lead-in line 1",
+	{"lead-in line 2",T_MED}
 })
-denial:section({
-	line("where is the second player?",T_LONG),
-	line("are they in the bathroom?",T_LONG),
-	line("maybe you should wait for them",T_SHORT),
-	line("its their quarter too",T_MED)
-})
-denial:section({
-	line("you know pong is a 2-player game right?",T_LONG),
-	line("dont have any friends?",T_MED),
-	line("sorry what i mean is",T_SHORT),
-	line("do you want some help?",T_MED)
-})
-denial:section({
-	line("never got to play before",T_LONG),
-	line("i bet i am really good",T_MED),
-	line("brb, gonna jump in real quick",T_LONG)
-})
-denial:section({
-	line("there we go",T_MED),
-	line("alright, this feels good",T_LONG),
-	line("a little trickier than I thought",T_MED),
-	line("i will shut up now so we can play",T_MED)
-})
+
+denial.cps = {}
+
+function denial:checkpoint(n,pl,cm)
+	add(self.cps,{n,self:branch(pl),self:branch(cm)})
+end
+
+denial:checkpoint(7,
+	{"cp7 player line 1","cp7 player line 2"},
+	{"cp7 com line 1","cp7 com line 2"})
+denial:checkpoint(10,
+	{"cp10 player line 1"},
+	{"cp10 com line 1"})
+
+denial:pool({"pool 1 line 1"})
+denial:pool({"pool 2 line 1","pool 2 line 2"})
+denial:pool({"pool 3 line 1"})
+
 denial.lose_section = denial:branch({
-	line("see, just as i said",T_MED),
-	line("i am good at this game",T_MED)
+	"denial com wins line 1",
+	"denial com wins line 2"
 })
 denial.win_section = denial:branch({
-	line("hmm, i lost",T_MED),
-	line("thats not possible",T_MED)
+	"denial player wins line 1",
+	"denial player wins line 2"
 })
 
 function denial:init()
-	self.armed = DEBUG_AI
+	local s = hud.p2_score
+	self.fired = {}
+	for i=1,#self.cps do
+		if (self.cps[i][1] <= s) self.fired[i] = true
+	end
+	self.idle = s == 0
 end
 
 function denial:machine()
-	if not self.armed and hud.p2_score > 1 then
-		self.armed = true
-		gm.level.pong.cfg.ai_enabled = true
-		hud.p1_score = 0
-		hud.p2_score = 0
+	local b = hud.p2_score
+	local hi = max(hud.p1_score,b)
+	for i=1,#self.cps do
+		local c = self.cps[i]
+		if not self.fired[i] and hi >= c[1] then
+			self.fired[i] = true
+			self:goto_section(b >= c[1] and c[2] or c[3])
+			return
+		end
 	end
 end
 
@@ -1490,12 +1569,12 @@ for i=2,5 do
 	for a=1,3 do
 		local ls = {}
 		for b=1,3 do
-			add(ls,line("act "..i.." section "..a.." line "..b,T_MED))
+			add(ls,{"act "..i.." section "..a.." line "..b,T_MED})
 		end
 		st:section(ls)
 	end
-	st.win_section = st:branch({line("act "..i.." you win",T_MED)})
-	st.lose_section = st:branch({line("act "..i.." you lose",T_MED)})
+	st.win_section = st:branch({{"act "..i.." you win",T_MED}})
+	st.lose_section = st:branch({{"act "..i.." you lose",T_MED}})
 end
 
 __gfx__
