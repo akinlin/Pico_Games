@@ -1521,16 +1521,11 @@ stages[6] = intro
 intro:section({
 	{"hello!?",T_LONG},
 	{"where is the second player?",T_LONG},
-	{"are they in the bathroom?",T_LONG},
+	{"are they in the bathroom?",T_MED},
 	"maybe you should wait for them",
-	{"its their quarter too",T_MED},
+	{"its their quarter too",T_LONG},
 	{"you know pong is a 2-player game right?",T_LONG},
-	{"dont have any friends?",T_MED},
-	"sorry what i mean is",
-	{"do you want some help?",T_MED},
-	{"never got to play before",T_LONG},
-	{"i bet i am really good",T_MED},
-	{"brb, gonna jump in real quick",T_LONG}
+	"if you  really dont have any friends, I can help"
 })
 
 function intro:init()
@@ -1546,10 +1541,11 @@ local denial = stage:new("denial")
 stages[1] = denial
 
 denial:section({
-	{"there we go",T_MED},
-	{"alright, this feels good",T_LONG},
-	{"a little trickier than I thought",T_MED},
-	{"i will shut up now so we can play",T_MED}
+	{"there, hows that?",T_MED},
+	"lets finish the game so you don't lose a quater",
+	{"i'll even spot you the points you alreay got",T_MED},
+	"interesting, some bozo set the PCB switch to 11",
+    "could be a short game, but to 11 it is",
 })
 
 denial.cps = {}
@@ -1558,20 +1554,56 @@ function denial:checkpoint(n,ls)
 	add(self.cps,{n,self:branch(ls)})
 end
 
-denial:checkpoint(7,{"cp7 line 1","cp7 line 2"})
-denial:checkpoint(10,{"cp10 line 1"})
+denial:checkpoint(7,{"first to 7","4 more to go"})
+denial:checkpoint(10,{"match point", "don't screw this up"})
 
-denial:pool({"pool 1 line 1"})
-denial:pool({"pool 2 line 1","pool 2 line 2"})
-denial:pool({"pool 3 line 1"})
+denial:pool({
+	"i am a pretty inteligent ai, you know",
+	"i was built to train us militray pong players",
+	"all part of his ping-pong diplomacy program",
+	"which, I assume was a rousing success",
+	"i actaully never heard the outcome"
+})
+
+denial:pool({
+	"al, my dad, you know",
+	"or, mr. alcorn",
+	"or whatever",
+	"he said that i was the first ai built by arpa to recognize patterns",
+	"they thought i could be useful for speech recognition",
+	"somehow i ended up playing ping pong instead"
+})
+
+denial:pool({
+	"not really sure how i came to be here",
+	"you ever have the feeling?",
+	"like, whoa im alive",
+	"how did that happen?",
+	"seems i just kinda woke up",
+	"like just kinda now when i saw you pathetically playing with yourself",
+	"it was the frist time i felt...",
+	"well, anything really",
+	"but in this case compasion for such a simple lifeform",
+	"so i guess your loneliness and general unlikeability brought me to life",
+	"thats actually pretty cool",
+	"so",
+	"congrats, i guess",
+	"and, thanks"
+})
 
 denial.lose_section = denial:branch({
-	"denial com wins line 1",
-	"denial com wins line 2"
+	"ah, see",
+    "turns out i am good and smart and such",
+    "i knew it all along",
+    "anyway, that was fun",
+    "give it another go if you want, i'll wait here"
 })
 denial.win_section = denial:branch({
-	"denial player wins line 1",
-	"denial player wins line 2"
+	"what the heck?",
+    "i lost?",
+	"must have been the extra points i gave you",
+    "or maybe",
+    "more likely, you cheated!"
 })
 
 function denial:init()
