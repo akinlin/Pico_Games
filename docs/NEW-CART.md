@@ -45,12 +45,11 @@ underscores. A cart is found by guessing its path, not by reading the README.
 
 4. **Add a section to the [wiki home page](https://github.com/akinlin/Pico_Games/wiki)**
    for the game — a short description and a link to its own wiki page. Create that page
-   when there is settled design to put on it.
+   when there is settled design to put on it. **The wiki home page is the list of games** —
+   the [root README](../README.md) describes the pattern and names no cart, so adding one
+   does not touch it.
 
-5. **Add the cart** to the structure table and the games table in the
-   [root README](../README.md).
-
-6. **Open a PR into `main`.**
+5. **Open a PR into `main`.**
 
 ## Verifying a cart loads
 
