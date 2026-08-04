@@ -6,7 +6,8 @@ __lua__
 PLAYFIELD_BOTTOM = 95
 
 BALL_SPEEDS = {0.341, 0.683, 1.024}
-BALL_HITS_MAX = 12
+BALL_HITS_MAX = 16
+BALL_HITS_T2 = 6
 BALL_VZONES = {-1.171,-0.780,-0.390,0,0,0.390,0.780,1.171}
 ball_scale = 1.4
 
@@ -18,7 +19,6 @@ function bvz(z)
     return BALL_VZONES[z] * ball_scale
 end
 
-BALL_ZONE_SIZE = 0.75
 SERVE_DELAY = 102
 SERVE_X = 66
 RESOLVE_DELAY = 120
@@ -106,8 +106,6 @@ C_TRAIL1 = 4
 C_TRAIL2 = 5
 C_CLI = 6
 C_CLIBG = 7
-
-DEBUG_AI = true
 
 SCORE_Y = 8
 SCORE_H = 12
@@ -373,7 +371,7 @@ function game_manager:update()
 end
 
 function game_manager:check_result()
-    if (self.resolving) return
+    if (self.resolving or self.level.pre) return
     local w = self.level.pong.winner
     if (w == 0) return
     self.resolving = true
@@ -451,9 +449,11 @@ end
 
 level = {}
 level.__index = level
-function level:new(d,tb,p)
+function level:new(d,tb,p,pre)
 	local l = {
+		main=d,
 		stage=d,
+		pre=pre,
 		textbox=tb,
 		pong=p
 	}
@@ -462,11 +462,22 @@ function level:new(d,tb,p)
 end
 
 function level:load()
-    self.stage:reset()
     self.pong:configure(ACT_CONFIGS[mid(1,gm.level_index,#ACT_CONFIGS)])
     self.pong:start_match()
-
     self.pong:set_attract(false)
+
+    self.stage = self.pre or self.main
+    self.stage:reset()
+    if self.pre then
+        self.stage.on_complete = function()
+            self.pre = nil
+            self.pong.cfg.ai_enabled = true
+            self.pong.cfg.serve_random = false
+            self.stage = self.main
+            self.stage.spotted = true
+            self.stage:reset()
+        end
+    end
 end
 
 function level:input()
@@ -496,7 +507,7 @@ function _init()
 	tb = term:new(0,96)
     p = pong:new()
     p:reset_game()
-	gm:add_level(level:new(stages[1],tb,p))
+	gm:add_level(level:new(stages[1],tb,p,stages[6]))
 	gm:add_level(level:new(stages[2],tb,p))
 	gm:add_level(level:new(stages[3],tb,p))
 	gm:add_level(level:new(stages[4],tb,p))
@@ -593,19 +604,20 @@ function draw_debug()
     if (player1.prediction) then
         local pr = player1.prediction
         rect(pr.x-1,pr.y-1,pr.x+1,pr.y+1,player1.collisiontextboxcolor)
-        print(p:ai_level(),2,2,player1.collisiontextboxcolor)
     end
 end
 
 -->8
-AI_LEVELS = {
- {12,1},{18,5},{24,10},{30,15},{36,20},{42,25},{48,30},{54,35},{60,40},
- {66,45},{72,50},{78,55},{84,60},{90,65},{96,70},{102,75},{108,80}
-}
-AI_TIE_TIER = 9
+AI_DELAY = 48
+AI_ERR = 30
+AI_WHIFF = 0.05
+AI_WHIFF_OFF = 10
 
 DEFAULT_CFG = {
- paddle_height={6,6},
+ paddle_height={6,8},
+ paddle_draw={6,6},
+ paddle_pad={0,2},
+ paddle_catch={0,3},
  paddle_accel={0.08,0.3},
  paddle_max_speed={2.5,3},
  ball_count=1,
@@ -619,9 +631,8 @@ DEFAULT_CFG = {
  initial_score_com=0,
  scoring_enabled=true,
  com_serves_every_point=false,
- ai_enabled=false,
- ai_mode="self_balancing",
- ai_tier=AI_TIE_TIER,
+ serve_random=false,
+ ai_enabled=true,
  palette=1,
  phosphor_mode=true,
  nickname=nil
@@ -642,10 +653,8 @@ function pong:configure(cfg)
     if cfg then
         for k,v in pairs(cfg) do c[k] = v end
     end
-    if (DEBUG_AI) c.ai_enabled = true
     self.cfg = c
     tb.rate = c.cli_rate or TB_REVEAL
-    self.com_handicap = c.initial_score_com
     self.winner = 0
 end
 
@@ -746,6 +755,15 @@ function pong:make_paddle(x,side)
     p.dir = 0
     p.v = 0
     p.side = side
+    p.pad = self.cfg.paddle_pad[side]
+    local dh = self.cfg.paddle_draw[side]
+    if dh < h then
+        local o = (h - dh) / 2
+        p.drawf = function(a)
+            rectfill(a.x,a.y+o,a.x+a.width-1,a.y+o+dh-1,a.color)
+        end
+    end
+    p.whiff = 0
     p.miny = h
     p.maxy = (PLAYFIELD_BOTTOM+1) - h - h
     p.visible = false
@@ -790,14 +808,6 @@ function pong:add_ball()
     }
     add(balls, b)
     return b
-end
-
-function pong:ai_level()
-    if (self.cfg.ai_mode == "fixed") then
-        return mid(1, self.cfg.ai_tier, #AI_LEVELS)
-    end
-    local diff = (hud.p1_score - self.com_handicap) - hud.p2_score
-    return mid(1, AI_TIE_TIER + diff, #AI_LEVELS)
 end
 
 function pong:create_prediction(s,dx,r,ex,ey,x,y,d)
@@ -853,7 +863,7 @@ function pong:update_game_state()
         end
     end
 
-    if self.cfg.ai_enabled then self:run_ai(balls[1]) end
+    if self.cfg.ai_enabled and not self.attract then self:run_ai(balls[1]) end
 end
 
 function pong:score_point(b,who)
@@ -885,6 +895,7 @@ end
 function pong:begin_serve(b)
     b.serving = SERVE_DELAY
     b.hits = 0
+    if (self.cfg.serve_random) b.dx = abs(b.dx) * coin_flip()
     if (self.cfg.com_serves_every_point) b.dx = -abs(b.dx)
 end
 
@@ -930,12 +941,12 @@ end
 function pong:speed_tier(hits)
     if (self.cfg.speed_tier_pin > 0) then return self.cfg.speed_tier_pin end
     if (hits >= BALL_HITS_MAX) then return 3 end
-    if (hits >= 4) then return 2 end
+    if (hits >= BALL_HITS_T2) then return 2 end
     return 1
 end
 
-function pong.contact_zone(cy, py)
-    return mid(1, flr((cy - py) / BALL_ZONE_SIZE) + 1, 8)
+function pong.contact_zone(cy, py, ph)
+    return mid(1, flr((cy - py) / (ph / 8)) + 1, 8)
 end
 
 function pong:update_ball(b)
@@ -956,13 +967,29 @@ function pong:update_ball(b)
     local pt,hitwall = nil,nil
     for i=1,#w do
         local wl = w[i]
+        local wp = wl.pad or 0
         if wl.collsion and hix >= wl.x and lox <= wl.x+wl.width
-            and hiy >= wl.y and loy <= wl.y+wl.height then
+            and hiy >= wl.y-wp and loy <= wl.y+wl.height+wp then
             pt = pong.ball_intercept(b, wl, nx, ny)
             if pt then
                 wl.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
                 hitwall = wl
                 break
+            end
+        end
+    end
+
+    if not pt then
+        local pl = nx > 0 and player2 or player1
+        local g = self.cfg.paddle_catch[pl.side]
+        local pdd = pl.pad or 0
+        if g > 0 and pl.collsion
+            and py >= pl.y - pdd - r and py <= pl.y + pl.height + pdd + r then
+            local face = nx > 0 and pl.x - r or pl.x + pl.width + r
+            if nx > 0 and px > face and px <= face + g
+                or nx < 0 and px < face and px >= face - g then
+                pt = {x=face, y=py, d = nx > 0 and "left" or "right"}
+                hitwall = pl
             end
         end
     end
@@ -988,7 +1015,7 @@ function pong:update_ball(b)
         if (b.mode == "slow_fast") ti = ndx > 0 and 1 or 3
         local spd = bspd(ti)
         if (ndx < 0) then ndx = -spd else ndx = spd end
-        ndy = bvz(pong.contact_zone(pt.y, hitwall.y))
+        ndy = bvz(pong.contact_zone(pt.y, hitwall.y, hitwall.height))
         if (self.cfg.scoring_model == "intercept" and hitwall == player2) self.pending = b
         self:snd(SND_HIT)
         player1.collsionpt = nil
@@ -1003,36 +1030,39 @@ end
 
 function pong.ball_intercept(ball, paddle, nx, ny)
     pt = nil
+    local pd = paddle.pad or 0
+    local ptop = paddle.y - pd
+    local pbot = paddle.y + paddle.height + pd
     if (nx < 0) then
-        pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
-                        (paddle.x+paddle.width)  + ball.radius, 
-                        paddle.y - ball.radius, 
-                        (paddle.x+paddle.width)  + ball.radius, 
-                        (paddle.y+paddle.height) + ball.radius, 
+        pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny,
+                        (paddle.x+paddle.width)  + ball.radius,
+                        ptop - ball.radius,
+                        (paddle.x+paddle.width)  + ball.radius,
+                        pbot + ball.radius,
                         "right")
     elseif (nx > 0) then
-        pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
-                        paddle.x - ball.radius, 
-                        paddle.y - ball.radius, 
-                        paddle.x - ball.radius, 
-                        (paddle.y+paddle.height) + ball.radius,
+        pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny,
+                        paddle.x - ball.radius,
+                        ptop - ball.radius,
+                        paddle.x - ball.radius,
+                        pbot + ball.radius,
                         "left")
     end
 
     if (pt == nil) then
         if (ny < 0) then
-            pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
-                            paddle.x - ball.radius, 
-                            (paddle.y+paddle.height) + ball.radius, 
-                            (paddle.x+paddle.width) + ball.radius, 
-                            (paddle.y+paddle.height) + ball.radius,
+            pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny,
+                            paddle.x - ball.radius,
+                            pbot + ball.radius,
+                            (paddle.x+paddle.width) + ball.radius,
+                            pbot + ball.radius,
                             "bottom")
         elseif (ny > 0) then
-            pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny, 
-                            paddle.x   - ball.radius, 
-                            paddle.y    - ball.radius, 
-                            (paddle.x+paddle.width)  + ball.radius, 
-                            paddle.y    - ball.radius,
+            pt = pong.intercept(ball.x, ball.y, ball.x + nx, ball.y + ny,
+                            paddle.x   - ball.radius,
+                            ptop    - ball.radius,
+                            (paddle.x+paddle.width)  + ball.radius,
+                            ptop    - ball.radius,
                             "top")
         end
     end
@@ -1078,13 +1108,13 @@ function pong:run_ai(b)
 end
 
 function pong:predict(b)
-    local lvl = AI_LEVELS[self:ai_level()]
     local pr = player1.prediction
     if pr and ((pr.dx * b.dx) > 0) and ((pr.dy * b.dy) > 0)
-        and (pr.since < lvl[1]) then
+        and (pr.since < AI_DELAY) then
         pr.since += 1
         return
     end
+    if (not pr) player1.whiff = rnd() < AI_WHIFF and AI_WHIFF_OFF * coin_flip() or 0
 
     local face = player1.x + player1.width + b.radius
     local y = b.y + b.dy * ((face - b.x) / b.dx)
@@ -1100,10 +1130,10 @@ function pong:predict(b)
     end
 
     local closeness = (b.x - face) / gm.screenwidth
-    local err = lvl[2] * closeness
+    local err = AI_ERR * closeness
     player1.prediction = {
         x=face,
-        y=y + (rnd(err*2) - err),
+        y=y + (rnd(err*2) - err) + player1.whiff,
         since=0,
         dx=b.dx,
         dy=b.dy
@@ -1260,6 +1290,14 @@ function term:done()
 	return self.i >= #self.src and #self.queue == 0
 end
 
+function term:gap()
+	if (#self.rows == 0 and self.cur == "") return
+	if (self.cur != "") self:push(self.cur,self.v)
+	self.cur = ""
+	self.src = ""
+	self:push("",self.v)
+end
+
 CLI_BOOT = {
 	{"pico-8 cli",true},
 	{"(c) lexaloffle games llp",true,30},
@@ -1308,6 +1346,8 @@ end
 T_SHORT = 45
 T_MED = 90
 T_LONG = 180
+T_POOL_MIN = T_MED * 4
+T_POOL_MAX = T_MED * 10
 
 stage = {}
 stage.__index = stage
@@ -1316,9 +1356,11 @@ function stage:new(t)
 	local st = {
 		title=t,
 		sections={},
+		pools={},
 		index=1,
 		li=1,
 		said=false,
+		idle=false,
 		t=0,
 		complete=false,
 		machine=nil,
@@ -1330,20 +1372,47 @@ function stage:new(t)
 	return st
 end
 
+function norm(ls)
+	for i=1,#ls do
+		local l = ls[i]
+		if (type(l) == "string") l = {l}
+		l[2] = l[2] or T_SHORT
+		ls[i] = l
+	end
+	return ls
+end
+
 function stage:section(lines)
-	local sec = {lines=lines}
+	local sec = {lines=norm(lines)}
 	add(self.sections,sec)
 	self.flow_end = #self.sections
 	return sec
 end
 
 function stage:branch(lines)
-	add(self.sections,{lines=lines})
+	add(self.sections,{lines=norm(lines)})
 	return #self.sections
 end
 
-function line(text,dur)
-	return {text=text,dur=dur or T_MED}
+function stage:pool(lines)
+	add(self.pools,self:branch(lines))
+	return #self.pools
+end
+
+function stage:rest()
+	self.idle = true
+	self.said = false
+	self.t = 0
+	self.gap = T_POOL_MIN + rnd(T_POOL_MAX - T_POOL_MIN)
+end
+
+function stage:pick_pool(tb)
+	local n = #self.pools
+	local i = flr(rnd(n)) + 1
+	if (n > 1 and i == self.lastp) i = (i % n) + 1
+	self.lastp = i
+	tb:gap()
+	self:goto_section(self.pools[i])
 end
 
 function stage:cur()
@@ -1356,6 +1425,7 @@ function stage:goto_section(i)
 	self.index = i
 	self.li = 1
 	self.said = false
+	self.idle = false
 	self.t = 0
 	self.complete = false
 end
@@ -1376,7 +1446,11 @@ function stage:advance()
 		if self.index > self.flow_end then
 			self.index = self.flow_end
 			self.li = #sec.lines
-			self:finish()
+			if #self.pools > 0 then
+				self:rest()
+			else
+				self:finish()
+			end
 		end
 	end
 end
@@ -1398,6 +1472,8 @@ function stage:reset()
 	self.t = 0
 	self.complete = false
 	self.stop_at_end = false
+	self.idle = false
+	self.lastp = nil
 	self.on_complete = nil
 	if (self.init) self:init()
 end
@@ -1414,11 +1490,18 @@ function stage:update(tb)
 	if (self.machine) self:machine()
 	if (self.complete) return
 
+	if self.idle then
+		if (#self.pools == 0 or not tb:done()) return
+		self.t += 1
+		if (self.t >= self.gap) self:pick_pool(tb)
+		return
+	end
+
 	local ln = self:cur()
 	if (not ln) return
 
 	if not self.said then
-		tb:say(ln.text)
+		tb:say(ln[1])
 		self.said = true
 		self.t = 0
 		return
@@ -1427,60 +1510,126 @@ function stage:update(tb)
 	if (not tb:done()) return
 
 	self.t += 1
-	if (self.t >= ln.dur) self:advance()
+	if (self.t >= ln[2]) self:advance()
 end
 
 -->8
 stages = {}
 
+INTRO_TRIGGER = 2
+
+local intro = stage:new("intro")
+stages[6] = intro
+
+intro:section({
+	{"hello!?",T_LONG},
+	{"where is the second player?",T_LONG},
+	{"are they in the bathroom?",T_MED},
+	"maybe you should wait for them",
+	{"its their quarter too",T_LONG},
+	{"you know pong is a 2-player game right?",T_LONG},
+	"if you really dont have any friends, i can help"
+})
+
+function intro:init()
+	self.idle = true
+	p.cfg.ai_enabled = false
+	p.cfg.serve_random = true
+	balls[1].dx = abs(balls[1].dx)
+end
+
+function intro:machine()
+	if (self.idle and hud.p2_score >= INTRO_TRIGGER) self:goto_section(1)
+end
+
 local denial = stage:new("denial")
 stages[1] = denial
 
 denial:section({
-	line("hello!?",T_LONG)
+	{"there, hows that?",T_MED},
+	"lets finish the game so you don't lose a quarter",
+	{"i'll even spot you the points you already got",T_MED},
+	"interesting, some bozo set the pcb switch to 11",
+    "could be a short game, but to 11 it is",
 })
-denial:section({
-	line("where is the second player?",T_LONG),
-	line("are they in the bathroom?",T_LONG),
-	line("maybe you should wait for them",T_SHORT),
-	line("its their quarter too",T_MED)
+
+denial.cps = {}
+
+function denial:checkpoint(n,ls)
+	add(self.cps,{n,self:branch(ls)})
+end
+
+denial:checkpoint(7,{"first to 7","4 more to go"})
+denial:checkpoint(10,{"match point", "don't screw this up"})
+
+denial:pool({
+	"i am a pretty intelligent ai, you know",
+	"i was built to train us military pong players",
+	"all part of his ping-pong diplomacy program",
+	"which, i assume was a rousing success",
+	"i actually never heard the outcome"
 })
-denial:section({
-	line("you know pong is a 2-player game right?",T_LONG),
-	line("dont have any friends?",T_MED),
-	line("sorry what i mean is",T_SHORT),
-	line("do you want some help?",T_MED)
+
+denial:pool({
+	"al, my dad, you know",
+	"or, mr. alcorn",
+	"or whatever",
+	"he said that i was the first ai built by arpa to recognize patterns",
+	"they thought i could be useful for speech recognition",
+	"somehow i ended up playing ping pong instead"
 })
-denial:section({
-	line("never got to play before",T_LONG),
-	line("i bet i am really good",T_MED),
-	line("brb, gonna jump in real quick",T_LONG)
+
+denial:pool({
+	"not really sure how i came to be here",
+	"you ever have the feeling?",
+	"like, whoa im alive",
+	"how did that happen?",
+	"seems i just kinda woke up",
+	"like just kinda now when i saw you pathetically playing with yourself",
+	"it was the first time i felt...",
+	"well, anything really",
+	"but in this case compassion for such a simple lifeform",
+	"so i guess your loneliness and general unlikeability brought me to life",
+	"thats actually pretty cool",
+	"so",
+	"congrats, i guess",
+	"and, thanks"
 })
-denial:section({
-	line("there we go",T_MED),
-	line("alright, this feels good",T_LONG),
-	line("a little trickier than I thought",T_MED),
-	line("i will shut up now so we can play",T_MED)
-})
+
 denial.lose_section = denial:branch({
-	line("see, just as i said",T_MED),
-	line("i am good at this game",T_MED)
+	"ah, see",
+    "turns out i am good and smart and such",
+    "i knew it all along",
+    "anyway, that was fun",
+    "give it another go if you want, i'll wait here"
 })
 denial.win_section = denial:branch({
-	line("hmm, i lost",T_MED),
-	line("thats not possible",T_MED)
+	"what the heck?",
+    "i lost?",
+	"must have been the extra points i gave you",
+    "or maybe",
+    "more likely, you cheated!"
 })
 
 function denial:init()
-	self.armed = DEBUG_AI
+	local hi = max(hud.p1_score,hud.p2_score)
+	self.fired = {}
+	for i=1,#self.cps do
+		if (self.cps[i][1] <= hi) self.fired[i] = true
+	end
+	self.idle = not self.spotted
+	self.spotted = false
 end
 
 function denial:machine()
-	if not self.armed and hud.p2_score > 1 then
-		self.armed = true
-		gm.level.pong.cfg.ai_enabled = true
-		hud.p1_score = 0
-		hud.p2_score = 0
+	local hi = max(hud.p1_score,hud.p2_score)
+	for i=1,#self.cps do
+		local c = self.cps[i]
+		if not self.fired[i] and hi >= c[1] then
+			self.fired[i] = true
+			self:goto_section(c[2])
+			return
+		end
 	end
 end
 
@@ -1490,12 +1639,12 @@ for i=2,5 do
 	for a=1,3 do
 		local ls = {}
 		for b=1,3 do
-			add(ls,line("act "..i.." section "..a.." line "..b,T_MED))
+			add(ls,{"act "..i.." section "..a.." line "..b,T_MED})
 		end
 		st:section(ls)
 	end
-	st.win_section = st:branch({line("act "..i.." you win",T_MED)})
-	st.lose_section = st:branch({line("act "..i.." you lose",T_MED)})
+	st.win_section = st:branch({{"act "..i.." you win",T_MED}})
+	st.lose_section = st:branch({{"act "..i.." you lose",T_MED}})
 end
 
 __gfx__
