@@ -52,6 +52,18 @@ interpreter. That caught things longhand would have missed:
 
 Every one of those is a claim we'd otherwise have had to hand over as "should be fine."
 
+**And then, in M12, it started measuring *design* rather than arithmetic.** Pointing a
+second, deliberately worse version of COM's own brain at the player's paddle turned "is
+this too hard?" into a number, and produced three findings that contradicted everything
+reading the code had suggested — that softening the opponent *shortens* rallies, that his
+random mistakes cap how long a rally can be, and that longer rallies help the stronger
+player rather than the weaker one. Balance had been the last thing on the project still
+being decided by argument. It didn't need to be.
+
+The line that keeps moving is what "you can't see it run" actually excludes. It started as
+*everything*. It is now: how it looks, and how it feels. Both still need a person, and the
+second one is where every real problem in this game has come from.
+
 **The spec was right more often than the code, but not always.** The design docs won
 essentially every disagreement — except where they disagreed with *themselves*, which
 happened once and mattered a lot (see M6).
@@ -565,6 +577,187 @@ false twice over: the cart can be loaded to catch errors, and the game can be dr
 by frame to catch broken logic. What still needs a person is everything about how it
 *feels* — which, it turns out, is most of what matters.
 
+## M12 — The machine introduces itself
+
+Every milestone before this one built the machine. This was the first that built the
+*game* — the first act assembled out of finished parts rather than another part being
+finished. Mostly what it revealed is how much of the design had been written down without
+ever having been played.
+
+### Two stages where there was one
+
+The opening was always going to be the strongest thing in the game. You start a Pong cart,
+the other paddle doesn't move, you score a couple of points against nobody, and then the
+machine says hello. That was in the design from the beginning.
+
+What wasn't clear until it was built is that the opening isn't *part* of Denial — it's its
+own thing, with its own rules, that Denial happens to own. Before COM speaks there is no
+opponent, no counted score, and no act to lose. Splitting the two apart was the first move,
+and the rest of the milestone followed from having somewhere to put the seam.
+
+Then the seam moved. The plan had COM taking the paddle mid-sentence — the second paddle
+simply starting to move while he was still talking, with no announcement. Written down,
+that's a lovely beat. Played, it fights the one line already authored for the moment:
+*brb, gonna jump in real quick*. That is a character announcing he is about to leave and
+go do a thing. Letting him do the thing **after** the line, at the close of the sequence,
+is simpler and better. The design had been more clever than the writing needed.
+
+### The points you already scored
+
+The original plan reset the score to 0–0 when COM took the paddle. The opening points were
+a hook, not a lead; the real match started clean.
+
+It got cut for the most honest reason on this project so far: **the Pong is the least
+interesting part of the Pong game.** Five acts of a machine working through its own
+obsolescence, and the part where you knock a ball back and forth is the part you wait
+through. Resetting the score meant a full race to eleven *after* the good bit.
+
+So the score stands, and COM spots you whatever you'd run up — which is a better character
+beat than the reset ever was. He isn't being generous. He's showing off. He doesn't need
+those points.
+
+And because nothing caps it, the length of his introduction now decides how short the match
+is: the more he talks, the further ahead you start. That coupling was deliberate. It puts
+the pacing control in the writing rather than in a number somewhere, which is the only
+place it can actually be felt.
+
+One consequence came with it. COM's points count during the opening too — his paddle is
+dead, but if *you* miss, the ball still leaves your side. You are usually ahead when the
+real match begins. Usually.
+
+### COM stopped adjusting himself
+
+He used to have seventeen difficulty settings and slide between them against the score,
+weakening as he pulled ahead and sharpening as he fell behind, quietly keeping every match
+close. It was the tidiest piece of characterisation in the game precisely because it was
+never mentioned: COM adjusts himself to you in every act, and in the last act he stops, so
+the ending plays fair in fact and not only in dialogue.
+
+It's gone. Seventeen settings became one, plus a roughly one-in-twenty chance he simply
+misjudges a ball and swings wide. Simplicity was the reason, and the trade is real —
+Acceptance's ending now differs from every other act in what COM says, not in how he plays.
+
+If it comes back, it probably comes back as the mistakes. Let his error rate be the thing
+that varies and set it to zero in the final act: **COM stops making mistakes in the act
+where he stops needing to.** Same beat, a fraction of the machinery. A decision for when
+Acceptance gets built.
+
+### Three rounds of "it still feels off"
+
+The paddle took three passes. All three were reported the same way — *better, but not
+right yet* — and meant something different every time.
+
+**The extension that made things worse.** The player's paddle got two invisible pixels of
+reach at each end. Old, obvious idea: a slightly more forgiving paddle, no visible change.
+What shipped was worse than nothing, and the report was precise about it — the paddle felt
+*less* reliable near its edges than before.
+
+It had been applied in one place and not the other. The engine asks twice whether a ball
+can possibly hit something: a cheap "is it anywhere near?" test, then an exact one. The
+extension went into the exact test and not the cheap one, so the cheap one kept measuring
+the paddle at its real size and discarded most of the balls the extension existed to catch.
+Not all of them, though — a ball drifting *toward* the paddle sometimes clipped the real one
+on the way past and got through the filter. The extension ended up working only on the side
+the ball was moving away from, and not at all on a level shot.
+
+Which is worse than not working. A paddle that never catches edge balls is one you learn.
+A paddle that catches them depending on which way the ball happened to be drifting is one
+you can't.
+
+**The ball that had already gone past.** The next report was stranger: sometimes the paddle
+moves *through* the ball. It did.
+
+The engine watches for a ball crossing the plane of the paddle. That's deliberate — it
+can't be fooled by a ball travelling further in one frame than the paddle is wide. But once
+a ball is past that plane, nothing tests it again. Slide the paddle onto a ball that has
+just slipped by and the two share the same space while the machine has stopped caring. The
+phosphor trail, which smears the ball backwards across the screen, made it look even more
+like contact than it was.
+
+The fix is one this project keeps arriving at: **the 1972 machine did it right.** The
+original never asked whether the ball crossed anything. It asked, continuously, whether the
+ball and the paddle were in the same place — and if you swung a paddle onto a ball that had
+gone past, they *were*, and it came back. The tidier modern collision model had quietly
+dropped a case the circuit handled for free. The paddle now takes that hit for exactly as
+long as the two genuinely overlap on screen, and not a pixel longer.
+
+**The paddle you could see.** Third pass: make the player's paddle visibly taller. It
+worked — rallies lengthened immediately — and it was rejected on sight.
+
+The note was that the extra size *"felt too much like an advantage."* Which is the entire
+thing in six words. Every invisible kindness the paddle had been given was fine. The moment
+one of them was drawn on screen it stopped reading as *you playing well* and started reading
+as the game deciding you needed a hand.
+
+So the paddle kept every pixel of the taller one and gave back the sprite. It collides as an
+eight-pixel paddle and draws as a six-pixel one, identical to COM's. Nothing about how it
+plays changed. The only thing removed was the evidence.
+
+There's a rule in there worth keeping: **an advantage the game grants has to be invisible;
+an advantage the player chooses is allowed to show.** Bargaining is built entirely out of
+the second kind — its whole opening is choosing your own handicaps — and it will never have
+this problem, because you asked for it.
+
+### We stopped guessing at balance
+
+By the third pass it was clear that reasoning about difficulty from the code wasn't working.
+Every fix was defensible and the game kept being wrong.
+
+So the player got simulated. The machine already contains an opponent that predicts where
+the ball will go, with a reaction delay and a margin of error — so a second one was pointed
+at the other paddle, made worse, and a few hundred matches were played with nobody watching.
+That put the human on the same scale as COM: not "is this too hard," but *how much slower
+than COM can you be and still hold a rally.*
+
+Three things came out, and all three were the opposite of what the code suggested.
+
+- **Making COM worse makes rallies shorter.** Obvious in hindsight — a rally ends when
+  somebody misses, and a sloppier opponent misses sooner. Every instinct to "make it
+  easier" was shortening the exchanges it was meant to protect.
+- **COM's random mistakes put a ceiling on rally length.** If he throws one ball in twenty,
+  a rally can't average far past twenty exchanges; at one in seven it can't reach ten. The
+  knob that hands you points and the knob that gives you rallies are the same knob, turned
+  opposite ways.
+- **Longer rallies make the better player win more often.** Every extra exchange is another
+  chance for the weaker one to make the mistake. Length cannot buy fairness — fairness has
+  to be paid for separately.
+
+The measurable result was a difficulty curve with the cliff taken out of it. Before, a
+competent player won four matches in five and a weak one won one in five, with almost
+nothing in between. After, the drop between neighbouring skill levels roughly halved.
+
+It also turned up a bug that had nothing to do with balance and had been waiting a while.
+The paddle's eight aiming bands were being measured against a fixed width rather than
+against the paddle's own height — correct for the six-pixel paddle that has always existed,
+and silently wrong for any other. Bargaining's first offer to the player is a longer paddle.
+It would have arrived there.
+
+### How far we've drifted, and why
+
+This milestone spent more of the 1972 machine's authenticity than every previous one
+combined. The ledger is worth keeping honest.
+
+**The ball speeds up later** — at the sixth and sixteenth exchange rather than the fourth
+and twelfth. The reason is arithmetic: at its fastest the ball crosses the field in about a
+second, while a person needs roughly a fifth of a second to react and another half-second to
+run the paddle the full height of the screen. That leaves almost nothing. One speed down
+there's nearly twice the margin. Since the rallies are what the dialogue plays over, keeping
+the ball inside the readable band is worth more than matching the original's timing.
+
+Underneath that sits a genuine property of the 1972 design that reads like a bug and isn't:
+**the slow ball is the hard one.** How steeply the ball travels has nothing to do with how
+fast it crosses the field, so a slow ball simply has longer to bounce off the walls before
+it reaches you — around three times at the slowest speed against once at the quickest. The
+hardest ball in the game to read is the gentlest-looking one. The machine's opening serve
+is precisely that ball.
+
+**And the player's paddle is now better than COM's in three ways you cannot see** — it is
+taller than it looks, it reaches past its own ends, and it still catches a ball it sweeps
+onto after that ball has passed. That is a larger departure than any of the visual liberties
+taken so far, and it is justified by the same thing the spotted score was: you are reading a
+screen while you play. The game is asking you to do two things at once, and then quietly
+compensating for the one it interrupted.
+
 ---
 
 ## Running notes for the post-mortem
@@ -580,3 +773,18 @@ by frame to catch broken logic. What still needs a person is everything about ho
   both carried for three milestones with a written reason, then removed in one pass when
   the milestone that owned them arrived. Writing down *why* something was deferred, with
   measurements, made the eventual removal a five-minute decision.
+- Engine footprint continued: 28,273 (M7a) → 33,504 (pre-M12) → 35,902 (M12). Roughly
+  30,000 characters left, and dialogue spends from the same pocket.
+- **M12 was the first milestone where the design changed more than the code.** Three
+  written-down decisions were overturned by playing them: the paddle handover moving from
+  mid-sentence to the close, the score reset becoming a spot, and the visible larger
+  paddle. None of the three were wrong on paper.
+- Three playtest reports in a row said "better, but still off," and each one meant a
+  different bug. Worth remembering that the phrasing repeats even when the cause doesn't —
+  and that the third report was about how something *looked*, not how it behaved.
+- What M12 cost, for the honest ledger: COM's score-tracking difficulty (which was
+  Acceptance's ending, mechanically), the hardware's speed-up thresholds, and a player
+  paddle that is genuinely better than the opponent's in three invisible ways.
+- Candidate for the finished piece: **"the Pong is the least interesting part of the Pong
+  game."** That sentence is why the score is spotted, why the ball speeds up later, and why
+  the player's paddle cheats. One admission, most of a milestone.
