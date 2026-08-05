@@ -105,15 +105,25 @@ loads Denial's Intro, which sets `ai_enabled = false`, so force it back on or CO
 never moves; and PICO-8 numbers cap at 32767, so a frame guard of 300000 silently wraps
 negative and the loop never runs.
 
-**In Anger's swarm, group size is the only knob that matters.** M13 swept it against a
-perfect auto-player. At **four** balls per group the player loses no matter what else
-moves: widening the gap from 24 to 72 frames, raising paddle max speed from 4 to 8, pad
-from 2 to 4, and collidable height from 8 to 12 all left the result at 0–1 wins in 4, with
-the score pinned near 22–22. One paddle cannot cover four simultaneous heights, and no
-amount of speed or reach buys a second position. At **two** per group the same player wins
-7 for 7. Three is the boundary — winnable only with an invisible paddle buff, and then only
-by about two points. **Do not try to tune the swarm with the gap or the paddle; change the
-group size.**
+**In Anger's swarm, group size is the only knob that matters.** M13 swept it. At **four**
+balls per group the player loses no matter what else moves: widening the gap from 24 to 72
+frames, raising paddle max speed from 4 to 8, pad from 2 to 4, and collidable height from 8
+to 12 all left the result at 0–1 wins in 4, with the score pinned near 22–22. One paddle
+cannot cover four simultaneous heights, and no amount of speed or reach buys a second
+position. **Do not try to tune the swarm with the gap or the paddle; change the group size.**
+
+**And model an imperfect player, or the number lies.** Two per group looks fine against a
+perfect controller — it wins 7 for 7 — and is unwinnable in the hand: a controller that
+lets one ball in four go unchased loses *every* two-per-group configuration by 9 to 16
+points, at every gap tried. The perfect controller has no reaction time and hides exactly
+the difficulty a person runs into. Ship against the 75% figure; use the perfect one only to
+prove a configuration is possible at all. Anger ships at **one ball every 20 frames**,
+where the 75% controller wins 3 for 3 and a 50% one still loses.
+
+**Check what the harness is actually running.** The first one-ball-per-group sweep measured
+a 60-frame cadence rather than 20, because single-ball groups were still taking the
+aim-and-wind-up path meant for Tests 1 and 2. The numbers looked clean and were answering a
+different question. Aiming is now a per-test flag, not implied by group size.
 
 **The harness copy must override `CD_ID`.** `cartdata` is keyed by name, not by cart file,
 so a scratchpad copy writes to the *same* save file as the real cart. A harness that calls
@@ -242,7 +252,7 @@ compressed limit is enforced on the only build that matters.
 
 | Budget | Ceiling | Reality |
 |---|---|---|
-| **Compressed code** | **15,616 bytes** | **The binding constraint.** 12,745 used at M13 close, 2026-08-04 (**81.6%**), up from 11,801 (75.6%) at M12. Enforced on `.p8.png` / `.p8.rom`, which is the release format. **2,871 bytes remain for three acts and every real line of dialogue** — Anger's placeholders will be replaced by longer prose, so the slope is worse than it looks. See #70. |
+| **Compressed code** | **15,616 bytes** | **The binding constraint.** 12,906 used at M13 close, 2026-08-04 (**82.6%**), up from 11,801 (75.6%) at M12. Enforced on `.p8.png` / `.p8.rom`, which is the release format. **2,710 bytes remain for three acts and every real line of dialogue** — Anger's placeholders will be replaced by longer prose, so the slope is worse than it looks. See #70. |
 | Characters | 65,535 | Not binding, and **actively misleading** — it read as 28,413 spare on the same day compressed was 76% gone. Still the ceiling for a plain `.p8`. |
 | Tokens | 8,192 | A whole string literal is 1 token, so dialogue is nearly free here. |
 | CPU | 139,810 cycles/frame at 60fps | Never binds. Worst measured case is 40%. |
@@ -548,7 +558,7 @@ index 2 the player, matching `hud.p1`/`p2`.
 {palette=2, phosphor_mode=true, nickname="dum",
  speed_tier_pin=3, scoring_model="intercept", serve_model="launch",
  ball_count=0, ai_enabled=false, win_score={45,45},
- paddle_accel={0.3,0.4}, paddle_max_speed={4,4}}
+ paddle_accel={0.5,0.4}, paddle_max_speed={6,4}}
 ```
 
 That is Anger's real entry, and `win_score={45,45}` is deliberately unreachable: the act

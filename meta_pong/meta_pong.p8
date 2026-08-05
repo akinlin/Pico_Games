@@ -139,7 +139,7 @@ ACT_CONFIGS = {
  {palette=2, phosphor_mode=true, nickname="dum",
   speed_tier_pin=3, scoring_model="intercept", serve_model="launch",
   ball_count=0, ai_enabled=false, win_score={45,45},
-  paddle_accel={0.3,0.4}, paddle_max_speed={4,4}},
+  paddle_accel={0.5,0.4}, paddle_max_speed={6,4}},
  {palette=3, phosphor_mode=true, nickname="skr"},
  {palette=4, phosphor_mode=true, nickname="whr"},
  {palette=5, phosphor_mode=true, nickname="plr", ai_whiff=0}
@@ -874,6 +874,8 @@ function pong:update_game_state()
         elseif (b.x > -b.radius) and (b.x < gm.screenwidth + b.radius) and
             (b.y < PLAYFIELD_BOTTOM+b.radius) and (b.y > -b.radius) then
             self:update_ball(b)
+        elseif b.spent then
+            del(balls,b)
         else
             self:score_point(b, b.dx > 0 and 1 or 2)
         end
@@ -898,7 +900,7 @@ function pong:score_point(b,who)
         self:check_win()
     end
     if c.serve_model == "launch" then
-        del(balls,b)
+        b.spent = true
     else
         self:begin_serve(b)
     end
@@ -1665,10 +1667,13 @@ end
 A_AIMLO = 9
 A_AIMSPAN = 78
 A_MID = 48
-A_GAP2 = 75
-A_GAP3 = 24
-A_GRP3 = 2
+A_GAP2 = 45
+A_GAP3 = 20
+A_GRP3 = 1
 A_SWARM = 40
+A_HOPS = 3
+A_HOPSPAN = 22
+A_WIND = 15
 
 local anger = stage:new("anger")
 stages[2] = anger
@@ -1736,17 +1741,30 @@ function anger:init()
 	self.grp = 1
 	self.gp = 0
 	self.wait = 0
+	self.hop = 0
 	self.aim = nil
 	self.base = 0
+	player1.collsion = false
 end
 
-function anger:test(n,g,gp)
+function anger:newaim(near)
+	if near then
+		local c = player1.y + player1.height/2
+		self.aim = mid(A_AIMLO, c + rnd(A_HOPSPAN) - A_HOPSPAN/2, A_AIMLO + A_AIMSPAN)
+	else
+		self.aim = A_AIMLO + rnd(A_AIMSPAN)
+	end
+end
+
+function anger:test(n,g,gp,aimed)
 	self.base = hud.p2_score
 	self.pend = n
 	self.grp = g
 	self.gp = gp
+	self.aimed = aimed
 	self.wait = 0
-	self.aim = g > 1 and A_MID or nil
+	self.hop = 0
+	self.aim = aimed and nil or A_MID
 end
 
 function anger:done()
@@ -1755,7 +1773,10 @@ end
 
 function anger:fire()
 	if (self.pend <= 0 or p.winner > 0) return
-	if (not self.aim) self.aim = A_AIMLO + rnd(A_AIMSPAN)
+	if not self.aim then
+		self:newaim(false)
+		self.hop = A_HOPS
+	end
 	local c = player1.y + player1.height/2
 	local d = 0
 	if (self.aim < c-1) d = -1
@@ -1763,17 +1784,23 @@ function anger:fire()
 	p:move_paddle(player1,d)
 	self.wait -= 1
 	if (self.wait > 0) return
-	if self.grp > 1 then
+	if not self.aimed then
 		for i=1,min(self.grp,self.pend) do
 			p:launch(A_AIMLO + rnd(A_AIMSPAN))
 		end
 		self.pend -= self.grp
 		self.wait = self.gp
 	elseif d == 0 then
-		p:launch(player1.y + player1.height/2)
-		self.pend -= 1
-		self.aim = nil
-		self.wait = self.gp
+		if self.hop > 0 then
+			self.hop -= 1
+			self:newaim(true)
+			if (self.hop == 0) self.wait = A_WIND
+		else
+			p:launch(c)
+			self.pend -= 1
+			self.aim = nil
+			self.wait = self.gp
+		end
 	end
 end
 
@@ -1782,7 +1809,7 @@ function anger:machine()
 	if (not self.idle) return
 	local h = self.ph
 	if h == 1 then
-		self:test(1,1,0)
+		self:test(1,1,0,true)
 		self.ph = 2
 	elseif h == 2 then
 		if self:done() then
@@ -1793,7 +1820,7 @@ function anger:machine()
 		self:goto_section(a_s2)
 		self.ph = 4
 	elseif h == 4 then
-		self:test(3,1,A_GAP2)
+		self:test(3,1,A_GAP2,true)
 		self.ph = 5
 	elseif h == 5 then
 		if self:done() then
@@ -1804,7 +1831,7 @@ function anger:machine()
 		self:goto_section(a_s3)
 		self.ph = 7
 	elseif h == 7 then
-		self:test(A_SWARM,A_GRP3,A_GAP3)
+		self:test(A_SWARM,A_GRP3,A_GAP3,false)
 		self.ph = 8
 	elseif h == 8 then
 		if self:done() then

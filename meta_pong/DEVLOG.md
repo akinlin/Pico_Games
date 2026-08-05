@@ -758,6 +758,79 @@ taken so far, and it is justified by the same thing the spotted score was: you a
 screen while you play. The game is asking you to do two things at once, and then quietly
 compensating for the one it interrupted.
 
+## M13 — Forty balls, and the arithmetic that came with them
+
+Anger was the first act designed as a *microgame* rather than a match, and the first where
+building it forced a rule change rather than a code change.
+
+### The race that couldn't finish
+
+The design said race to 11, cumulative across three tests. That survives right up until you
+count the balls. Test 1 throws one, Test 2 throws three, Test 3 throws forty, and under
+intercept scoring every ball resolves to exactly one point for exactly one side. Forty-four
+balls, forty-four points. Race to 11 means the act ends somewhere between the seventh and
+eighteenth ball of the swarm, and the other twenty-odd balls never get thrown.
+
+So either the swarm is mostly decorative, or the act stops being a race. It stopped being a
+race. Anger tallies: every ball is thrown, and the higher score wins when the last one
+resolves. `win_score` is set to an unreachable 45 and the stage machine declares the winner
+itself — which also means Tests 1 and 2 are worth a real 4 of the 44 rather than being a
+prologue.
+
+That handed over one genuinely new rule: a tie goes to COM. You have to outscore him, not
+match him.
+
+### Three balls, because two can draw
+
+Test 2 was two balls in the design. It became three for a reason that only appears once the
+tests branch into win and lose dialogue: **two balls can split 1–1, and then there is no
+honest branch to take.** Three cannot draw. The odd count is doing structural work, not
+escalation work.
+
+### Group size is the whole difficulty, and nothing else is
+
+The swarm was built at four balls per group and was unwinnable. The instinct was to widen
+the gap between groups, and then to make the player's paddle better. Both were measured
+against a perfect auto-player, and both did nothing:
+
+- Gap 24 → 72 frames: still lost.
+- Paddle max speed 4 → 8, reach 2 → 4, collidable height 8 → 12: still lost, and the score
+  stayed pinned near 22–22 the whole time.
+
+One paddle cannot be in four places. No amount of speed or reach buys a second position, so
+every one of those knobs was pushing on something that wasn't the constraint. Dropping to
+two per group fixed instantly what none of them had touched.
+
+Then two per group turned out to be too hard as well — not for a perfect player, who wins it
+comfortably, but for a human. Modelling a 75%-attentive player (one that lets one ball in
+four go unchased) made that visible: it loses *every* two-per-group configuration by 9 to 16
+points, at every gap tried. The perfect-player number had been hiding the problem, because
+the thing being measured was a controller with no reaction time.
+
+The act ships at one ball at a time, 20 frames apart. It reads as a stream rather than a
+wave, and the honest cost is peak density: seven balls on screen instead of ten. What it
+buys is an act a real person can win — the 75% player takes it 3 for 3 — while a 50% player
+still loses it, so the difficulty is real rather than notional.
+
+### The ball that comes back
+
+Intercept scoring originally deleted the ball on contact: you swat it, the point lands, it
+vanishes. Played, that reads as the ball being *confiscated* rather than returned. Letting
+it rebound and fly back out of the field costs nothing mechanically — the point has already
+been scored, so the ball is marked spent and simply stops being able to score again — and it
+puts the hit back on screen where you can see it.
+
+It did require turning COM's paddle collision off for the act, which is a small admission
+worth writing down: **COM is not playing Pong in Anger.** He is a launcher with a paddle
+sprite. Nothing should bounce off him, because there is no rally to sustain.
+
+### What it cost
+
+Compressed went from 11,801 to 12,906 bytes — 75.6% to 82.6% of the BBS ceiling — with
+three acts and the entire script still to come. Anger's dialogue is placeholder, and real
+prose costs more than twice per character what code does. The engine minimisation pass is
+no longer a nice-to-have.
+
 ---
 
 ## Running notes for the post-mortem
@@ -785,6 +858,18 @@ compensating for the one it interrupted.
 - What M12 cost, for the honest ledger: COM's score-tracking difficulty (which was
   Acceptance's ending, mechanically), the hardware's speed-up thresholds, and a player
   paddle that is genuinely better than the opponent's in three invisible ways.
+- Engine footprint continued, now measured where it binds: compressed 11,801 (M12) →
+  12,906 (M13), against a 15,616 ceiling. The character count still reads as roomy and is
+  still misleading.
+- **M13's measurements were wrong twice before they were right.** The first sweep tuned the
+  wrong variable (gap, then paddle, when the answer was group size). The second measured a
+  perfect controller and declared the act winnable when a human couldn't win it. The third
+  measured a configuration the code didn't actually run — one-ball groups were still going
+  down the aim-and-wind-up path, so the real cadence was 60 frames, not 20. Each time the
+  numbers looked clean. Check *what the harness is actually exercising* before believing it.
+- Modelling an imperfect player is worth more than modelling a perfect one. The 75%
+  controller found a difficulty wall that three sweeps of a perfect controller had walked
+  straight past.
 - Candidate for the finished piece: **"the Pong is the least interesting part of the Pong
   game."** That sentence is why the score is spotted, why the ball speeds up later, and why
   the player's paddle cheats. One admission, most of a milestone.
