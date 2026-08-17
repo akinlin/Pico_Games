@@ -105,20 +105,31 @@ loads Denial's Intro, which sets `ai_enabled = false`, so force it back on or CO
 never moves; and PICO-8 numbers cap at 32767, so a frame guard of 300000 silently wraps
 negative and the loop never runs.
 
-**In Anger's swarm, group size is the only knob that matters.** M13 swept it. At **four**
-balls per group the player loses no matter what else moves: widening the gap from 24 to 72
-frames, raising paddle max speed from 4 to 8, pad from 2 to 4, and collidable height from 8
-to 12 all left the result at 0–1 wins in 4, with the score pinned near 22–22. One paddle
-cannot cover four simultaneous heights, and no amount of speed or reach buys a second
-position. **Do not try to tune the swarm with the gap or the paddle; change the group size.**
+**Anger's swarm is winnable only because the balls fly in formation, and that is the whole
+trick.** Balls that arrive at *different* heights can only ever yield one interception
+between them however many there are, so scattering the swarm makes it unwinnable and no
+other knob rescues it. M13 proved that the expensive way: at four scattered balls per group
+the player loses regardless of gap (24→72 frames), paddle max speed (4→8), pad (2→4) or
+collidable height (8→12), with the score pinned near 22–22 the whole time. Spacing them out
+one at a time is survivable but thin.
 
-**And model an imperfect player, or the number lies.** Two per group looks fine against a
-perfect controller — it wins 7 for 7 — and is unwinnable in the hand: a controller that
-lets one ball in four go unchased loses *every* two-per-group configuration by 9 to 16
-points, at every gap tried. The perfect controller has no reaction time and hides exactly
-the difficulty a person runs into. Ship against the 75% figure; use the perfect one only to
-prove a configuration is possible at all. Anger ships at **one ball every 20 frames**,
-where the 75% controller wins 3 for 3 and a 50% one still loses.
+**The fix is a burst that holds formation.** Every ball in a burst shares one launch height
+*and one `dy`*, so it keeps formation for the entire flight — wall bounces included, since
+they all bounce at the same point in their arc — and the whole burst arrives inside about
+11–14 px. That is roughly the paddle's effective band, so one good position sweeps a whole
+burst. Sharing `dy` is the load-bearing half: same height with different angles fans out
+across the field within a crossing and is no better than scattering.
+
+**And model an imperfect player, or the number lies.** Two scattered balls per group looks
+fine against a perfect controller — it wins 7 for 7 — and is unwinnable in the hand: a
+controller that lets one ball in four go unchased loses *every* two-per-group configuration
+by 9 to 16 points, at every gap tried. The perfect controller has no reaction time and hides
+exactly the difficulty a person runs into. Ship against the 75% figure; use the perfect one
+only to prove a configuration is possible at all.
+
+Note the swarm is now **all-or-nothing per burst**, so scores move in steps of about eight
+and a *parked* paddle still takes whole bursts by luck — a dead paddle measured 22–22, which
+the tie rule correctly gives to COM. That is the intended floor: doing nothing cannot win.
 
 **Check what the harness is actually running.** The first one-ball-per-group sweep measured
 a 60-frame cadence rather than 20, because single-ball groups were still taking the
@@ -252,7 +263,7 @@ compressed limit is enforced on the only build that matters.
 
 | Budget | Ceiling | Reality |
 |---|---|---|
-| **Compressed code** | **15,616 bytes** | **The binding constraint.** 12,906 used at M13 close, 2026-08-04 (**82.6%**), up from 11,801 (75.6%) at M12. Enforced on `.p8.png` / `.p8.rom`, which is the release format. **2,710 bytes remain for three acts and every real line of dialogue** — Anger's placeholders will be replaced by longer prose, so the slope is worse than it looks. See #70. |
+| **Compressed code** | **15,616 bytes** | **The binding constraint.** 12,968 used at M13 close, 2026-08-04 (**83.0%**), up from 11,801 (75.6%) at M12. Enforced on `.p8.png` / `.p8.rom`, which is the release format. **2,648 bytes remain for three acts and every real line of dialogue** — Anger's placeholders will be replaced by longer prose, so the slope is worse than it looks. See #70. |
 | Characters | 65,535 | Not binding, and **actively misleading** — it read as 28,413 spare on the same day compressed was 76% gone. Still the ceiling for a plain `.p8`. |
 | Tokens | 8,192 | A whole string literal is 1 token, so dialogue is nearly free here. |
 | CPU | 139,810 cycles/frame at 60fps | Never binds. Worst measured case is 40%. |
@@ -279,8 +290,9 @@ doing (#70) but the leverage is well under 1:1 — do not assume otherwise.
 Measured frame cost, not estimated: **~24%** in normal single-ball play with phosphor on;
 **12%** for 40 balls at tier 3 with phosphor off; **40%** for both together. The 40-ball
 figure **stopped being a stress configuration at M13** — Anger's Test 3 throws exactly 40,
-with phosphor on, so 40% is now the game's shipped worst case rather than a hypothetical.
-Only about 8 are in flight at once, so the true peak is lower. Note the cycles-per-frame
+with phosphor on, so 40% bounds the game's shipped worst case rather than being a
+hypothetical. Because the swarm arrives as timed bursts, the measured peak is 16 balls at
+once rather than 40, so the real figure is well under it. Note the cycles-per-frame
 convention (2²³ ÷ 60) is the community reading of the manual's "8 MHz virtual CPU," not a
 figure the manual states.
 

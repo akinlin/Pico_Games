@@ -1668,8 +1668,10 @@ A_AIMLO = 9
 A_AIMSPAN = 78
 A_MID = 48
 A_GAP2 = 45
-A_GAP3 = 20
-A_GRP3 = 1
+A_GAP3 = 70
+A_GRP3 = 8
+A_BGAP = 4
+A_BSPAN = 6
 A_SWARM = 40
 A_HOPS = 3
 A_HOPSPAN = 22
@@ -1742,6 +1744,7 @@ function anger:init()
 	self.gp = 0
 	self.wait = 0
 	self.hop = 0
+	self.bn = 0
 	self.aim = nil
 	self.base = 0
 	player1.collsion = false
@@ -1764,6 +1767,7 @@ function anger:test(n,g,gp,aimed)
 	self.aimed = aimed
 	self.wait = 0
 	self.hop = 0
+	self.bn = 0
 	self.aim = aimed and nil or A_MID
 end
 
@@ -1785,11 +1789,16 @@ function anger:fire()
 	self.wait -= 1
 	if (self.wait > 0) return
 	if not self.aimed then
-		for i=1,min(self.grp,self.pend) do
-			p:launch(A_AIMLO + rnd(A_AIMSPAN))
+		if self.bn <= 0 then
+			self.bn = min(self.grp,self.pend)
+			self.by = A_AIMLO + rnd(A_AIMSPAN)
+			self.bz = flr(rnd(4)) + 3
 		end
-		self.pend -= self.grp
-		self.wait = self.gp
+		local b = p:launch(self.by + rnd(A_BSPAN) - A_BSPAN/2)
+		b.dy = bvz(self.bz)
+		self.bn -= 1
+		self.pend -= 1
+		self.wait = self.bn > 0 and A_BGAP or self.gp
 	elseif d == 0 then
 		if self.hop > 0 then
 			self.hop -= 1
