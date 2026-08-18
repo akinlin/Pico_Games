@@ -844,6 +844,121 @@ no longer a nice-to-have.
 
 ---
 
+## M14 — The budget nobody was watching
+
+Bargaining is the one act that was always going to cost more than it was worth, and that was
+written down and agreed in advance. It is the only place in the game where the player is
+asked to *choose* rather than to play, and a choice screen is a whole small interface: two
+things drawn, one of them highlighted, a commit, three times over. The engine-footprint rule
+that governs everywhere else was suspended for it deliberately.
+
+It did cost what it was supposed to. What nobody had costed was the budget it spent from.
+
+### The wrong ruler
+
+Since M12 the number on the wall has been compressed size — the ceiling that decides whether
+a cart can go to the BBS at all. It was tracked at every milestone, it had a slope, it had a
+projection, and at M13 it read 83% with 2,648 bytes to spare. Tight, watched, understood.
+
+Then Bargaining's choice system went in and the cart refused to load. Not over compressed
+size — that was fine, and still is. **Over tokens: 8,195 against a ceiling of 8,192.** Three
+tokens.
+
+The token budget had been written off as "not close" for the whole project, and it was true
+when it was written, and nobody re-read it. Going back to check, the cart had been at 94.4%
+at M13 close. It had been the tightest budget in the game for at least one milestone and
+possibly several, and it was the only one not being measured — precisely *because* it had
+once been comfortable.
+
+There is a lesson in there that is not about PICO-8. The number you check is the number you
+were worried about last time. Compressed size got measured every milestone because it had
+frightened somebody once. Tokens never had, so tokens never got measured, so tokens were
+free to become the problem without anybody noticing.
+
+Every budget gets measured at every close now, including the ones that look fine.
+
+### Paying for it with things that were already dead
+
+Landing the act meant finding tokens somewhere the same afternoon. They came from code that
+had been dead for milestones: a debug drawing routine nothing called, a constructor nothing
+constructed, an empty input hook, and three fields on every wall in the game that existed
+only to feed the routine nothing called. A hundred and sixty-nine tokens, and not a single
+behaviour changed.
+
+That is a satisfying way to pay a bill and a slightly uncomfortable one. The cleanup pass
+was scheduled for *after* all five acts, on the sound reasoning that there is no point
+shrinking code about to be rewritten. The ceiling didn't care about the schedule.
+
+### The choice that wasn't a bargain
+
+Three choices, six options, and one of them never worked as a choice.
+
+The third pair was meant to be a serve rule: sudden death, or COM serves every point. The
+second option overrode the hardware's one genuine reward — that scoring earns you the
+receive — so the player could never make COM run down a serve again.
+
+Reading it back, it is not a bargain at all. It is a penalty with a nicer name. Both halves
+of a choice have to be something a reasonable player might *want*, and nobody wants a
+serve disadvantage for its own sake. Worse, it was the only inert option on the board:
+choosing it changed how the match felt without changing what the player was playing for.
+
+It became a two-minute clock. If the match hasn't reached eleven when the clock runs out,
+whoever is ahead takes it — and a tie goes to COM, the same rule Anger arrived at from a
+different direction entirely.
+
+The clock does something the serve rule never did: it makes the *second* choice matter.
+Sudden death erases COM's advantage completely — one point decides everything, so a head
+start is worth nothing. Under the clock a head start is worth exactly what it says. The
+third choice stopped being a coin toss with extra steps and became a real fork: bet
+everything on one point, or grind two minutes against a deficit.
+
+The serve axis was deleted rather than parked. It came back twenty-seven tokens, which at
+that point was a quarter of the remaining budget.
+
+### Advantages that read as advantages
+
+The first pass gave the player a paddle two pixels longer and a COM paddle a third slower,
+and both were reported the same way: *this doesn't feel like much*. They were measured
+against the defaults rather than against being noticed. A longer paddle nobody notices is
+not an advantage the player chose; it is a number in a config table.
+
+The paddle went to sixteen pixels of collision behind fourteen drawn, against a default six
+drawn. COM went to a fifth of a pixel per frame short of half his normal speed — slow enough
+that crossing the field takes him longer than the ball takes to arrive at the two faster
+tiers.
+
+Which surfaced the trap the design had flagged and left open: the paddle's travel limits were
+derived from its own height, one paddle height of dead zone at each end. Faithful to the
+hardware, and fine at six or eight pixels. At sixteen it meant the player's reward for
+choosing a bigger paddle was an eight-pixel hole at the top and bottom of the field. The
+option punished itself.
+
+The dead zone became its own axis, defaulting to exactly what the two existing paddles
+already had, so nothing else in the game moved. The long paddle now covers the same band of
+field as the short one, with twice the face. An advantage the player picked should be an
+advantage.
+
+### The confirm button was also the cheat key
+
+The best bug of the milestone, and the cheapest fix.
+
+Bargaining is the first act in the entire game that asks the player to press a face button.
+Denial and Anger are paddle-only — up, down, and nothing else. So when the first playtest
+came back saying *the choices stop after the second one and the game jumps to Depression*,
+the choice system was the obvious suspect and was entirely innocent.
+
+PICO-8 maps each face button to three keys. ❎ is X, V or M. 🅾️ is Z, **C** or N. The
+cart's debug shortcuts, added milestones ago for testing win and lose branches without
+playing to them, were `c` for player-win and `v` for player-lose.
+
+So confirming a choice with C committed the choice *and won the act*, in the same frame.
+The next choice's labels drew, the victory dialogue played over the top of them, and the
+game left for Depression with a selection still on screen. Every frame of it correct
+behaviour from two features that had never been in the same room before.
+
+It had been sitting there, harmless, since the day it was written — waiting for the first
+act that needed a button.
+
 ## Running notes for the post-mortem
 
 - Engine footprint over time: 32,653 (pre-M0) → 33,822 (M2 peak) → 27,951 (post comment
@@ -872,6 +987,12 @@ no longer a nice-to-have.
 - Engine footprint continued, now measured where it binds: compressed 11,801 (M12) →
   12,968 (M13), against a 15,616 ceiling. The character count still reads as roomy and is
   still misleading.
+- Engine footprint continued: compressed 12,968 (M13) → 13,552 (M14), against 15,616. But
+  the number that actually bound was tokens: 7,729 (M13) → 8,085 (M14) against 8,192, and it
+  was never measured until it broke. **Two budgets tracked from here, not one.**
+- The token ceiling is the first constraint in the project that made a *schedule* decision
+  rather than a design one: the cleanup pass planned for after all five acts had to start
+  early, mid-milestone, because the cart would not load otherwise.
 - **M13's measurements were wrong three times before they were right.** The first sweep
   tuned the wrong variable — gap, then paddle, when the constraint was formation. The second
   measured a perfect controller and declared the act winnable when a human couldn't win it.

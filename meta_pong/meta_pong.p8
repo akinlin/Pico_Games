@@ -140,7 +140,7 @@ ACT_CONFIGS = {
   speed_tier_pin=3, scoring_model="intercept", serve_model="launch",
   ball_count=0, ai_enabled=false, win_score={45,45},
   paddle_accel={0.5,0.4}, paddle_max_speed={6,4}},
- {palette=3, phosphor_mode=true, nickname="skr"},
+ {palette=3, phosphor_mode=true, nickname="skr", ball_count=0},
  {palette=4, phosphor_mode=true, nickname="whr"},
  {palette=5, phosphor_mode=true, nickname="plr", ai_whiff=0}
 }
@@ -484,9 +484,6 @@ function level:load()
     end
 end
 
-function level:input()
-end
-
 function level:update()
     self.stage:update(self.textbox)
     if (not gm.resolving) self.pong:update_game_state()
@@ -494,6 +491,7 @@ end
 
 function level:draw()
     pong.draw_balls()
+    if (self.stage.draw) self.stage:draw()
 	tb:draw()
 end
 
@@ -542,8 +540,8 @@ function update_debug_keys()
     local k = stat(31)
     if (k == "") return
     if gm.state == game_manager.states.level and not nament.active then
-        if (k == "c") p.winner = 2
-        if (k == "v") p.winner = 1
+        if (k == "1") p.winner = 2
+        if (k == "2") p.winner = 1
     end
     if (k == "[") ball_scale = max(0.5, ball_scale - 0.1)
     if (k == "]") ball_scale = min(3, ball_scale + 0.1)
@@ -590,24 +588,11 @@ function draw_score()
     print("\^w\^t" .. hud.p1_score,hud.p1_x-(#tostr(hud.p1_score)*8),hud.p1_y,hud.p1_color)
     print("\^w\^t" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
 
+    if (p.cfg.time_limit > 0) print(flr((p.cfg.time_limit-p.clock)/60),60,NICK_Y,C_SCORE)
+
     if hud.nick and gm.state == game_manager.states.level then
         print(COM_NAME,NICK_X1,NICK_Y,hud.p1_color)
         print(hud.nick,NICK_X2,NICK_Y,hud.p2_color)
-    end
-end
-
-function draw_debug()
-    for x=1,#walls do 
-        if (walls[x].collision_debug_draw) then 
-            if (walls[x].collsionpt) then
-                rect(walls[x].collsionpt.x,walls[x].collsionpt.y,walls[x].collsionpt.x+2,walls[x].collsionpt.y+2,walls[x].collisiontextboxcolor)
-            end
-        end
-    end
-
-    if (player1.prediction) then
-        local pr = player1.prediction
-        rect(pr.x-1,pr.y-1,pr.x+1,pr.y+1,player1.collisiontextboxcolor)
     end
 end
 
@@ -618,6 +603,7 @@ AI_WHIFF_OFF = 10
 
 DEFAULT_CFG = {
  paddle_height={6,8},
+ paddle_dead={6,8},
  paddle_draw={6,6},
  paddle_pad={0,2},
  paddle_catch={0,3},
@@ -633,7 +619,7 @@ DEFAULT_CFG = {
  score_multiplier_com=1,
  initial_score_com=0,
  scoring_enabled=true,
- com_serves_every_point=false,
+ time_limit=0,
  serve_random=false,
  serve_model="replica",
  ai_enabled=true,
@@ -689,6 +675,7 @@ end
 
 function pong:start_match()
     self.winner = 0
+    self.clock = 0
     self.pending = nil
     self:init_board()
     self:init_hud()
@@ -755,8 +742,6 @@ end
 
 function pong:init_players()
     player1 = self:make_paddle(20,1)
-    player1.prediction = nil
-    player1.collisiontextboxcolor = 14
     player2 = self:make_paddle(108,2)
 end
 
@@ -775,8 +760,9 @@ function pong:make_paddle(x,side)
         end
     end
     p.whiff = 0
-    p.miny = h
-    p.maxy = (PLAYFIELD_BOTTOM+1) - h - h
+    local d = self.cfg.paddle_dead[side]
+    p.miny = d
+    p.maxy = (PLAYFIELD_BOTTOM+1) - d - h
     p.visible = false
     add(walls, p)
     return p
@@ -830,20 +816,6 @@ function pong:launch(y)
     return b
 end
 
-function pong:create_prediction(s,dx,r,ex,ey,x,y,d)
-    local p = {
-        since=s,
-        dx=dx,
-        radius=r,
-        exactx=ex,
-        exacty=ey,
-        x=x,
-        y=y,
-        d=d
-    }
-    return p
-end
-
 function pong:create_wall(xpos,ypos,w,h)
     wall = {
         width = w,
@@ -853,9 +825,6 @@ function pong:create_wall(xpos,ypos,w,h)
         color = C_PADDLE,
         visible = true,
         collsion = true,
-        collsionpt = nil,
-        collisiontextboxcolor = 8,
-        collision_debug_draw = false,
         drawf = function(a)
                     rectfill(a.x,a.y,a.x+a.width-1,a.y+a.height-1,a.color)
                 end
@@ -866,6 +835,12 @@ end
 
 function pong:update_game_state()
     if (not self.attract) self:handle_game_input()
+
+    local tl = self.cfg.time_limit
+    if tl > 0 and self.winner == 0 then
+        self.clock += 1
+        if (self.clock >= tl) self.winner = hud.p2_score > hud.p1_score and 2 or 1
+    end
 
     for i=#balls,1,-1 do
         local b = balls[i]
@@ -897,7 +872,7 @@ function pong:score_point(b,who)
         else
             hud.p2_score += 1
         end
-        self:check_win()
+        self:check_win(who)
     end
     if c.serve_model == "launch" then
         b.spent = true
@@ -906,12 +881,11 @@ function pong:score_point(b,who)
     end
 end
 
-function pong:check_win()
+function pong:check_win(w)
     local c = self.cfg
     if (self.winner > 0) return
     if c.sudden_death then
-        if (hud.p1_score > hud.p2_score) self.winner = 1
-        if (hud.p2_score > hud.p1_score) self.winner = 2
+        self.winner = w
     else
         if (hud.p1_score >= c.win_score[1]) self.winner = 1
         if (hud.p2_score >= c.win_score[2]) self.winner = 2
@@ -922,7 +896,6 @@ function pong:begin_serve(b)
     b.serving = SERVE_DELAY
     b.hits = 0
     if (self.cfg.serve_random) b.dx = abs(b.dx) * coin_flip()
-    if (self.cfg.com_serves_every_point) b.dx = -abs(b.dx)
 end
 
 function pong:update_serve(b)
@@ -998,7 +971,6 @@ function pong:update_ball(b)
             and hiy >= wl.y-wp and loy <= wl.y+wl.height+wp then
             pt = pong.ball_intercept(b, wl, nx, ny)
             if pt then
-                wl.collsionpt = {x=pt.x,y=pt.y,d=pt.d}
                 hitwall = wl
                 break
             end
@@ -1044,8 +1016,6 @@ function pong:update_ball(b)
         ndy = bvz(pong.contact_zone(pt.y, hitwall.y, hitwall.height))
         if (self.cfg.scoring_model == "intercept" and hitwall == player2) self.pending = b
         self:snd(SND_HIT)
-        player1.collsionpt = nil
-        player2.collsionpt = nil
     end
 
     b.x = px
@@ -1448,6 +1418,7 @@ end
 
 function stage:goto_section(i)
 	if (not self.sections[i]) return
+	self.gap = nil
 	self.index = i
 	self.li = 1
 	self.said = false
@@ -1497,6 +1468,7 @@ function stage:finish()
 end
 
 function stage:reset()
+	self.gap = nil
 	self.index = 1
 	self.li = 1
 	self.said = false
@@ -1522,7 +1494,7 @@ function stage:update(tb)
 	if (self.complete) return
 
 	if self.idle then
-		if (#self.pools == 0 or not tb:done()) return
+		if (not self.gap or not tb:done()) return
 		self.t += 1
 		if (self.t >= self.gap) self:pick_pool(tb)
 		return
@@ -1649,6 +1621,7 @@ function denial:init()
 		if (self.cps[i][1] <= hi) self.fired[i] = true
 	end
 	self.idle = not self.spotted
+	if (self.idle) self:rest()
 	self.spotted = false
 end
 
@@ -1850,7 +1823,151 @@ function anger:machine()
 	end
 end
 
-for i=3,5 do
+B_MID = 48
+B_YS = {28,64}
+B_PH = 16
+B_PD = 14
+B_ACC = 0.03
+B_SPD = 1
+B_TIME = 7200
+B_MULT = 3
+B_HEAD = 5
+
+B_OPTS = {
+	{"longer paddle","slower com paddle"},
+	{"com scores x3","com starts at 10"},
+	{"sudden death","2 minute limit"}
+}
+
+local barg = stage:new("bargaining")
+stages[3] = barg
+
+barg:section({
+	"barg s1 intro l1 short",
+	{"barg s1 intro l2 med",T_MED},
+	{"barg s1 intro l3 long",T_LONG},
+	"barg s1 intro l4 short"
+},true)
+
+local b_sec = {
+	barg:branch({
+		"barg s2 choice1 l1 short",
+		{"barg s2 choice1 l2 med",T_MED},
+		{"barg s2 choice1 l3 long",T_LONG}
+	},true),
+	barg:branch({
+		"barg s3 choice2 l1 short",
+		{"barg s3 choice2 l2 med",T_MED},
+		{"barg s3 choice2 l3 long",T_LONG}
+	},true),
+	barg:branch({
+		"barg s4 choice3 l1 short",
+		{"barg s4 choice3 l2 med",T_MED},
+		{"barg s4 choice3 l3 long",T_LONG}
+	},true)
+}
+
+barg:pool({
+	"barg pool a l1 short",
+	{"barg pool a l2 med",T_MED},
+	"barg pool a l3 short"
+})
+
+barg:pool({
+	"barg pool b l1 short",
+	{"barg pool b l2 med",T_MED},
+	"barg pool b l3 short"
+})
+
+barg.win_section = barg:branch({
+	"barg win l1 short",
+	{"barg win l2 med",T_MED},
+	{"barg win l3 long",T_LONG}
+})
+
+barg.lose_section = barg:branch({
+	"barg lose l1 short",
+	{"barg lose l2 med",T_MED},
+	{"barg lose l3 long",T_LONG}
+})
+
+function barg:init()
+	self.c = 0
+	self.o = 1
+	self.arm = false
+end
+
+function barg:apply(o)
+	local g,c = p.cfg,self.c
+	if c == 1 then
+		if o == 1 then
+			g.paddle_height[2] = B_PH
+			g.paddle_draw[2] = B_PD
+		else
+			g.paddle_accel[1] = B_ACC
+			g.paddle_max_speed[1] = B_SPD
+		end
+	elseif c == 2 then
+		if o == 1 then
+			g.score_multiplier_com = B_MULT
+		else
+			g.initial_score_com = B_HEAD
+		end
+	elseif o == 1 then
+		g.sudden_death = true
+	else
+		g.time_limit = B_TIME
+	end
+end
+
+function barg:commit()
+	self.arm = false
+	self:apply(self.o)
+	self.c += 1
+	if self.c > 3 then
+		p.cfg.ball_count = 1
+		p:start_match()
+		p:set_attract(false)
+		self:rest()
+	else
+		self:goto_section(b_sec[self.c])
+	end
+end
+
+function barg:machine()
+	if self.c == 0 then
+		if self.idle then
+			self.c = 1
+			self:goto_section(b_sec[1])
+		end
+		return
+	end
+	if (self.c > 3) return
+	self.o = player2.y + player2.height/2 < B_MID and 1 or 2
+	if (not self.idle) return
+	if btn(4) or btn(5) then
+		if (self.arm) self:commit()
+	else
+		self.arm = true
+	end
+end
+
+function barg:draw()
+	if (self.c < 1 or self.c > 3 or not self.idle) return
+	local t = B_OPTS[self.c]
+	for i=1,2 do
+		local l,y = t[i],B_YS[i]
+		local x = 64 - #l*2
+		if i == self.o then
+			print(l,x,y,C_SCORE)
+			rectfill(x,y+6,x+#l*4-2,y+6,C_SCORE)
+		else
+			print(l,x,y,C_PADDLE)
+		end
+	end
+end
+
+for i=4,5 do
 	local st = stage:new("act"..i)
 	stages[i] = st
 	for a=1,3 do
