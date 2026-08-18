@@ -92,6 +92,21 @@ Work on a copy in the scratchpad, never the real cart. `_draw()` is not called, 
 visual can be checked this way — how the game *feels* still needs a human, and that is
 most of what matters.
 
+**The scratchpad is pruned between turns, and it lies about it.** The pruning deletes files
+but leaves the directory tree standing, so a clone in there can end up with a `.git/`
+containing four empty folders: `ls` still shows `.git`, and `git` says *"not a repository."*
+In M13 this ate two local, unpushed **wiki** commits. Harness carts are disposable and it
+does not matter; the wiki clone is not.
+
+Treat anything committed in the scratchpad as **volatile until pushed**. Since wiki edits
+normally sit unpushed across turns — pushing needs an explicit go-ahead, and that can be
+several turns away — keep the edited `Meta-Pong.md` itself as the thing you are protecting,
+not the commit. Recovery is then cheap: re-clone, copy the file back over, re-commit. Only
+the git history is lost, and the wiki records settled state rather than process, so a single
+consolidated commit is an acceptable outcome rather than a problem to reconstruct.
+
+The cart repo is on a real disk and is **not** affected. This is a scratchpad-only hazard.
+
 **Balance is measurable, and guessing at it has been wrong every time.** Overriding
 `pong:handle_game_input()` with a controller built like `run_ai` — its own reaction delay
 and aim error — puts the player on the same scale as COM, so "how much weaker than COM can
