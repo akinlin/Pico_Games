@@ -136,11 +136,13 @@ PAL_ATTRACT = 6
 
 ACT_CONFIGS = {
  {palette=1, phosphor_mode=true},
- {palette=2, phosphor_mode=true, nickname="dum"},
+ {palette=2, phosphor_mode=true, nickname="dum",
+  speed_tier_pin=3, scoring_model="intercept", serve_model="launch",
+  ball_count=0, ai_enabled=false, win_score={45,45},
+  paddle_accel={0.5,0.4}, paddle_max_speed={6,4}},
  {palette=3, phosphor_mode=true, nickname="skr"},
  {palette=4, phosphor_mode=true, nickname="whr"},
- {palette=5, phosphor_mode=true, nickname="plr", ai_whiff=0},
- {palette=1, phosphor_mode=false, ball_count=40, speed_tier_pin=3, ai_enabled=true}
+ {palette=5, phosphor_mode=true, nickname="plr", ai_whiff=0}
 }
 
 
@@ -633,6 +635,7 @@ DEFAULT_CFG = {
  scoring_enabled=true,
  com_serves_every_point=false,
  serve_random=false,
+ serve_model="replica",
  ai_enabled=true,
  ai_whiff=0.05,
  palette=1,
@@ -818,6 +821,15 @@ function pong:add_ball()
     return b
 end
 
+function pong:launch(y)
+    local b = self:add_ball()
+    b.x = player1.x + player1.width + b.radius
+    b.y = y
+    b.dx = bspd(self:speed_tier(0))
+    b.dy = bvz(flr(rnd(8))+1)
+    return b
+end
+
 function pong:create_prediction(s,dx,r,ex,ey,x,y,d)
     local p = {
         since=s,
@@ -855,13 +867,15 @@ end
 function pong:update_game_state()
     if (not self.attract) self:handle_game_input()
 
-    for i=1,#balls do
+    for i=#balls,1,-1 do
         local b = balls[i]
         if (b.serving > 0) then
             self:update_serve(b)
         elseif (b.x > -b.radius) and (b.x < gm.screenwidth + b.radius) and
             (b.y < PLAYFIELD_BOTTOM+b.radius) and (b.y > -b.radius) then
             self:update_ball(b)
+        elseif b.spent then
+            del(balls,b)
         else
             self:score_point(b, b.dx > 0 and 1 or 2)
         end
@@ -871,7 +885,7 @@ function pong:update_game_state()
         end
     end
 
-    if self.cfg.ai_enabled and not self.attract then self:run_ai(balls[1]) end
+    if self.cfg.ai_enabled and not self.attract and balls[1] then self:run_ai(balls[1]) end
 end
 
 function pong:score_point(b,who)
@@ -885,7 +899,11 @@ function pong:score_point(b,who)
         end
         self:check_win()
     end
-    self:begin_serve(b)
+    if c.serve_model == "launch" then
+        b.spent = true
+    else
+        self:begin_serve(b)
+    end
 end
 
 function pong:check_win()
@@ -1390,15 +1408,15 @@ function norm(ls)
 	return ls
 end
 
-function stage:section(lines)
-	local sec = {lines=norm(lines)}
+function stage:section(lines,h)
+	local sec = {lines=norm(lines),hold=h}
 	add(self.sections,sec)
 	self.flow_end = #self.sections
 	return sec
 end
 
-function stage:branch(lines)
-	add(self.sections,{lines=norm(lines)})
+function stage:branch(lines,h)
+	add(self.sections,{lines=norm(lines),hold=h})
 	return #self.sections
 end
 
@@ -1447,6 +1465,11 @@ function stage:advance()
 		if self.stop_at_end then
 			self.li = #sec.lines
 			self:finish()
+			return
+		end
+		if sec.hold then
+			self.li = #sec.lines
+			self.idle = true
 			return
 		end
 		self.li = 1
@@ -1641,7 +1664,193 @@ function denial:machine()
 	end
 end
 
-for i=2,5 do
+A_AIMLO = 9
+A_AIMSPAN = 78
+A_MID = 48
+A_GAP2 = 45
+A_GAP3 = 70
+A_GRP3 = 8
+A_BGAP = 4
+A_BSPAN = 6
+A_SWARM = 40
+A_HOPS = 3
+A_HOPSPAN = 22
+A_WIND = 15
+
+local anger = stage:new("anger")
+stages[2] = anger
+
+anger:section({
+	"anger s1 rant l1 short",
+	{"anger s1 rant l2 med",T_MED},
+	{"anger s1 rant l3 long",T_LONG},
+	"anger s1 rant l4 short"
+})
+
+anger:section({
+	"anger s2 rules l1 short",
+	{"anger s2 rules l2 med",T_MED},
+	{"anger s2 rules l3 long",T_LONG}
+},true)
+
+local a_t1w = anger:branch({
+	"anger s3 t1 win l1 short",
+	{"anger s3 t1 win l2 med",T_MED}
+},true)
+
+local a_t1l = anger:branch({
+	"anger s4 t1 lose l1 short",
+	{"anger s4 t1 lose l2 med",T_MED}
+},true)
+
+local a_s2 = anger:branch({
+	"anger s5 ramp l1 short",
+	{"anger s5 ramp l2 med",T_MED},
+	{"anger s5 ramp l3 long",T_LONG}
+},true)
+
+local a_t2w = anger:branch({
+	"anger s6 t2 win l1 short",
+	{"anger s6 t2 win l2 med",T_MED}
+},true)
+
+local a_t2l = anger:branch({
+	"anger s7 t2 lose l1 short",
+	{"anger s7 t2 lose l2 med",T_MED}
+},true)
+
+local a_s3 = anger:branch({
+	"anger s8 swarm l1 short",
+	{"anger s8 swarm l2 med",T_MED},
+	{"anger s8 swarm l3 long",T_LONG}
+},true)
+
+anger.win_section = anger:branch({
+	"anger win l1 short",
+	{"anger win l2 med",T_MED},
+	{"anger win l3 long",T_LONG}
+})
+
+anger.lose_section = anger:branch({
+	"anger lose l1 short",
+	{"anger lose l2 med",T_MED},
+	{"anger lose l3 long",T_LONG}
+})
+
+function anger:init()
+	self.ph = 1
+	self.pend = 0
+	self.grp = 1
+	self.gp = 0
+	self.wait = 0
+	self.hop = 0
+	self.bn = 0
+	self.aim = nil
+	self.base = 0
+	player1.collsion = false
+end
+
+function anger:newaim(near)
+	if near then
+		local c = player1.y + player1.height/2
+		self.aim = mid(A_AIMLO, c + rnd(A_HOPSPAN) - A_HOPSPAN/2, A_AIMLO + A_AIMSPAN)
+	else
+		self.aim = A_AIMLO + rnd(A_AIMSPAN)
+	end
+end
+
+function anger:test(n,g,gp,aimed)
+	self.base = hud.p2_score
+	self.pend = n
+	self.grp = g
+	self.gp = gp
+	self.aimed = aimed
+	self.wait = 0
+	self.hop = 0
+	self.bn = 0
+	self.aim = aimed and nil or A_MID
+end
+
+function anger:done()
+	return self.pend <= 0 and #balls == 0
+end
+
+function anger:fire()
+	if (self.pend <= 0 or p.winner > 0) return
+	if not self.aim then
+		self:newaim(false)
+		self.hop = A_HOPS
+	end
+	local c = player1.y + player1.height/2
+	local d = 0
+	if (self.aim < c-1) d = -1
+	if (self.aim > c+1) d = 1
+	p:move_paddle(player1,d)
+	self.wait -= 1
+	if (self.wait > 0) return
+	if not self.aimed then
+		if self.bn <= 0 then
+			self.bn = min(self.grp,self.pend)
+			self.by = A_AIMLO + rnd(A_AIMSPAN)
+			self.bz = flr(rnd(4)) + 3
+		end
+		local b = p:launch(self.by + rnd(A_BSPAN) - A_BSPAN/2)
+		b.dy = bvz(self.bz)
+		self.bn -= 1
+		self.pend -= 1
+		self.wait = self.bn > 0 and A_BGAP or self.gp
+	elseif d == 0 then
+		if self.hop > 0 then
+			self.hop -= 1
+			self:newaim(true)
+			if (self.hop == 0) self.wait = A_WIND
+		else
+			p:launch(c)
+			self.pend -= 1
+			self.aim = nil
+			self.wait = self.gp
+		end
+	end
+end
+
+function anger:machine()
+	self:fire()
+	if (not self.idle) return
+	local h = self.ph
+	if h == 1 then
+		self:test(1,1,0,true)
+		self.ph = 2
+	elseif h == 2 then
+		if self:done() then
+			self:goto_section(hud.p2_score > self.base and a_t1w or a_t1l)
+			self.ph = 3
+		end
+	elseif h == 3 then
+		self:goto_section(a_s2)
+		self.ph = 4
+	elseif h == 4 then
+		self:test(3,1,A_GAP2,true)
+		self.ph = 5
+	elseif h == 5 then
+		if self:done() then
+			self:goto_section(hud.p2_score - self.base >= 2 and a_t2w or a_t2l)
+			self.ph = 6
+		end
+	elseif h == 6 then
+		self:goto_section(a_s3)
+		self.ph = 7
+	elseif h == 7 then
+		self:test(A_SWARM,A_GRP3,A_GAP3,false)
+		self.ph = 8
+	elseif h == 8 then
+		if self:done() then
+			p.winner = hud.p2_score > hud.p1_score and 2 or 1
+			self.ph = 9
+		end
+	end
+end
+
+for i=3,5 do
 	local st = stage:new("act"..i)
 	stages[i] = st
 	for a=1,3 do

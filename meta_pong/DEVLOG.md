@@ -758,6 +758,90 @@ taken so far, and it is justified by the same thing the spotted score was: you a
 screen while you play. The game is asking you to do two things at once, and then quietly
 compensating for the one it interrupted.
 
+## M13 — Forty balls, and the arithmetic that came with them
+
+Anger was the first act designed as a *microgame* rather than a match, and the first where
+building it forced a rule change rather than a code change.
+
+### The race that couldn't finish
+
+The design said race to 11, cumulative across three tests. That survives right up until you
+count the balls. Test 1 throws one, Test 2 throws three, Test 3 throws forty, and under
+intercept scoring every ball resolves to exactly one point for exactly one side. Forty-four
+balls, forty-four points. Race to 11 means the act ends somewhere between the seventh and
+eighteenth ball of the swarm, and the other twenty-odd balls never get thrown.
+
+So either the swarm is mostly decorative, or the act stops being a race. It stopped being a
+race. Anger tallies: every ball is thrown, and the higher score wins when the last one
+resolves. `win_score` is set to an unreachable 45 and the stage machine declares the winner
+itself — which also means Tests 1 and 2 are worth a real 4 of the 44 rather than being a
+prologue.
+
+That handed over one genuinely new rule: a tie goes to COM. You have to outscore him, not
+match him.
+
+### Three balls, because two can draw
+
+Test 2 was two balls in the design. It became three for a reason that only appears once the
+tests branch into win and lose dialogue: **two balls can split 1–1, and then there is no
+honest branch to take.** Three cannot draw. The odd count is doing structural work, not
+escalation work.
+
+### Group size is the whole difficulty, and nothing else is
+
+The swarm was built at four balls per group and was unwinnable. The instinct was to widen
+the gap between groups, and then to make the player's paddle better. Both were measured, and
+both did nothing:
+
+- Gap 24 -> 72 frames: still lost.
+- Paddle max speed 4 -> 8, reach 2 -> 4, collidable height 8 -> 12: still lost, and the
+  score stayed pinned near 22-22 the whole time.
+
+The reason took three rounds of measurement to see, and it is not about quantity at all.
+**Balls arriving at different heights can only ever yield one interception between them.**
+Two balls, four balls, forty - if they are spread across the field when they reach the
+paddle, the paddle answers one of them. Every knob being turned was pushing on speed and
+reach, and the constraint was geometry.
+
+Spacing them out one at a time helped, and shipped for about a day. It was still too hard in
+the hand, and it cost the thing the swarm was for: forty balls arriving single file is not
+overwhelming, it is a queue.
+
+The answer came from the other direction - not fewer balls, but **more of them in the same
+place.** Give every ball in a burst the same launch height *and the same angle*, and the
+burst holds formation for the whole crossing, wall bounces included, because every ball
+bounces at the same point in its arc. Eight balls arrive as a train inside about twelve
+pixels, which is roughly the paddle's effective band. One good position answers all eight.
+
+Sharing the angle is the load-bearing half, and it is the part that reads as counterintuitive:
+same height with *different* angles fans out across the field within a single crossing and is
+no better than scattering. The formation is made of the velocity, not the spawn point.
+
+What that buys is an act that asks for positioning rather than reaction speed - the right
+skill to demand from someone who is also reading a console - and one that got denser rather
+than thinner in the process: sixteen balls on screen at peak, against ten for the wave that
+was unwinnable. It also goes all-or-nothing per burst, so the score moves in steps of eight
+and the closing tally swings on whether you read five throws correctly.
+
+### The ball that comes back
+
+Intercept scoring originally deleted the ball on contact: you swat it, the point lands, it
+vanishes. Played, that reads as the ball being *confiscated* rather than returned. Letting
+it rebound and fly back out of the field costs nothing mechanically — the point has already
+been scored, so the ball is marked spent and simply stops being able to score again — and it
+puts the hit back on screen where you can see it.
+
+It did require turning COM's paddle collision off for the act, which is a small admission
+worth writing down: **COM is not playing Pong in Anger.** He is a launcher with a paddle
+sprite. Nothing should bounce off him, because there is no rally to sustain.
+
+### What it cost
+
+Compressed went from 11,801 to 12,968 bytes — 75.6% to 83.0% of the BBS ceiling — with
+three acts and the entire script still to come. Anger's dialogue is placeholder, and real
+prose costs more than twice per character what code does. The engine minimisation pass is
+no longer a nice-to-have.
+
 ---
 
 ## Running notes for the post-mortem
@@ -785,6 +869,27 @@ compensating for the one it interrupted.
 - What M12 cost, for the honest ledger: COM's score-tracking difficulty (which was
   Acceptance's ending, mechanically), the hardware's speed-up thresholds, and a player
   paddle that is genuinely better than the opponent's in three invisible ways.
+- Engine footprint continued, now measured where it binds: compressed 11,801 (M12) →
+  12,968 (M13), against a 15,616 ceiling. The character count still reads as roomy and is
+  still misleading.
+- **M13's measurements were wrong three times before they were right.** The first sweep
+  tuned the wrong variable — gap, then paddle, when the constraint was formation. The second
+  measured a perfect controller and declared the act winnable when a human couldn't win it.
+  The third measured a configuration the code didn't actually run: one-ball groups were still
+  going down the aim-and-wind-up path, so the real cadence was 60 frames, not 20. Each time
+  the numbers looked clean. Check *what the harness is actually exercising* before believing
+  it, and check that it is exercising the thing you think is the constraint.
+- Modelling an imperfect player is worth more than modelling a perfect one. The 75%
+  controller found a difficulty wall that three sweeps of a perfect controller had walked
+  straight past - and then a 50% controller was needed again when the fix overshot.
+- **Three tuning passes went to the wrong variable before the constraint was even
+  identified.** Gap, then paddle, then ball count - all quantity knobs, when the answer was
+  that simultaneous balls at different heights are geometrically un-catchable. Worth asking
+  "what is the constraint?" before "which number do I move?", because a sweep that moves the
+  wrong variable produces clean, believable, useless numbers.
+- The design instinct that solved it came from the user, not the measurements: *more balls,
+  closer together* was the opposite of where three rounds of data had been pointing, and it
+  was right. The measurements were good at saying what didn't work.
 - Candidate for the finished piece: **"the Pong is the least interesting part of the Pong
   game."** That sentence is why the score is spotted, why the ball speeds up later, and why
   the player's paddle cheats. One admission, most of a milestone.
