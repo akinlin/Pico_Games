@@ -88,6 +88,14 @@ for i=1,900 do _update60() end
 printh("resolving="..tostr(gm.resolving).." winner="..p.winner)
 ```
 
+**A harness copy no longer fits under the token ceiling on its own.** The cart sits within
+about a hundred tokens of 8,192, and a harness of any substance pushes it over — the run then
+fails with `program too large` rather than a test result, which reads like a cart bug and is
+not one. Strip what the harness cannot use when building the copy. `init_menu`, `nament:update`,
+`nament:draw`, `_draw`, `apply_tear`, `set_scanlines`, `update_crt` and `draw_score` come to
+roughly 700 tokens between them and none of them run under `-x`, which never calls `_draw`.
+Replacing each body with a bare `end` is enough.
+
 Work on a copy in the scratchpad, never the real cart. `_draw()` is not called, so nothing
 visual can be checked this way — how the game *feels* still needs a human, and that is
 most of what matters.
@@ -193,14 +201,31 @@ dead code — see issue #54.)
 
 **The milestone loop.** Sync → read the issue and the wiki sections it names, *before*
 writing code → implement → hand over a verify block → the user launches the cart and
-reports back → iterate → strip debug scaffolding → **measure compressed size** → commit →
+reports back → iterate → strip debug scaffolding → **measure every budget** → commit →
 update or close the issue. **Each milestone is a GitHub issue**; there is no plan file.
 M12–M16 are #60–#64.
 
-**Record the compressed figure at every milestone close**, in the commit message and in the
-wiki's resource table. The point is a visible slope rather than a discovery at export time:
-the number moved from unmeasured to 76% used in a single session, and the character count
-gave no warning at any point.
+**Record every budget at every milestone close** — compressed size, tokens, characters —
+in the commit message and in the wiki's resource table. Watching one number is how M14 got
+caught: compressed size was tracked from M12 and was comfortable, while tokens sat unmeasured
+at 94.4% and the cart went **over the token ceiling mid-milestone**, refusing to load. A
+budget that is not measured is not comfortable, it is unknown. If a future release adds a
+limit this table does not carry — map size, sprite banks, memory — measure that too rather
+than assuming the two we watch are the only two.
+
+The full set PICO-8 enforces, and how each is read:
+
+| Budget | Ceiling | How to measure |
+|---|---|---|
+| Tokens | 8,192 | `-x` reports `N / 8192` **only when over**. To read it while under, pad a copy with a known count and subtract — 300 × `zz=1` is 900 tokens |
+| Compressed code | 15,616 | `.p8.rom` header, below |
+| Characters | 65,535 | `wc -c` on the cart, minus the non-code sections |
+| Sprites / SFX / music | 256 / 64 / 64 | Editor; the spritesheet is spoken for — phosphor stashes the previous frame in it |
+| Map | 128 × 32 (+128 × 32 shared) | Unused |
+| CPU | `stat(1)`, 1.0 = a full frame | The `cpu` pause-menu toggle |
+
+`INFO()` prints code size, tokens and compressed size together from inside PICO-8, which is
+the quickest read when a human is at the keyboard rather than a harness.
 
 **Git workflow.** Conventional-commit style subject lines, reference the issue number.
 The repository uses a **branch per cart** — all Meta Pong work lives on the `meta_pong`
@@ -278,9 +303,9 @@ compressed limit is enforced on the only build that matters.
 
 | Budget | Ceiling | Reality |
 |---|---|---|
-| **Compressed code** | **15,616 bytes** | **The binding constraint.** 12,968 used at M13 close, 2026-08-04 (**83.0%**), up from 11,801 (75.6%) at M12. Enforced on `.p8.png` / `.p8.rom`, which is the release format. **2,648 bytes remain for three acts and every real line of dialogue** — Anger's placeholders will be replaced by longer prose, so the slope is worse than it looks. See #70. |
-| Characters | 65,535 | Not binding, and **actively misleading** — it read as 28,413 spare on the same day compressed was 76% gone. Still the ceiling for a plain `.p8`. |
-| Tokens | 8,192 | A whole string literal is 1 token, so dialogue is nearly free here. |
+| **Tokens** | **8,192** | **The binding constraint, and the one nobody was watching.** 8,085 used at M14 close, 2026-08-17 (**98.7%**), up from 7,729 (94.4%) at M13 — a figure discovered only when the cart went *over* mid-milestone and refused to load. **107 tokens remain for Depression, Acceptance and every act mechanic still unwritten.** A whole string literal is 1 token, so dialogue is nearly free here and the pressure is entirely code. Enforced on every format, `.p8` included. See #70. |
+| Compressed code | 15,616 bytes | 13,552 at M14 close (**86.8%**), from 12,968 (83.0%) at M13 and 11,801 (75.6%) at M12. **2,064 bytes remain** — real, but no longer the thing that runs out first. Enforced on `.p8.png` / `.p8.rom`, which is the release format. |
+| Characters | 65,535 | Not binding, and **actively misleading** — it read as 28,413 spare on the same day compressed was 76% gone, and as roomy on the day tokens ran out. Still the ceiling for a plain `.p8`. |
 | CPU | 139,810 cycles/frame at 60fps | Never binds. Worst measured case is 40%. |
 | Sprites / SFX / music | 256 / 64 / 64 | Not close to binding. |
 
@@ -355,7 +380,7 @@ the pixel-aspect correction, which is why angles carry over exactly.
 | Net | x = 64, 1 px wide, 2 on / 2 off |
 | COM paddle x | 20 |
 | Player paddle x | 108 |
-| Paddle travel | top-edge `y` from **6 to 84** for a 6 px paddle — one paddle height of dead zone each end, so the player's 8 px body travels 8 to 80 |
+| Paddle travel | top-edge `y` from **6 to 84** for a 6 px paddle — one paddle height of dead zone each end, so the player's 8 px body travels 8 to 80. The dead zone is the `paddle_dead` axis (`{6,8}`), **not** the paddle's height: they were the same expression until M14, which meant a taller paddle silently lost reach at both ends. Bargaining's 16 px paddle keeps the standard 6–89 coverage band because of it |
 | Serve x | 66 |
 
 Ball, net, and paddle *width* are rounded up to minimum legible size — strict scaling
@@ -458,10 +483,11 @@ cheating — do not reintroduce it.
 | Vertical position | The ball keeps travelling and bouncing **invisibly** through the delay, so its height on reappearance is effectively arbitrary. This is why the original's serve feels random. **Reproduce it deliberately — this is not a bug.** |
 | First serve of a match | Always max vertical speed (±1.171), the steepest angle the model produces, at horizontal tier 1 |
 
-**One exception to the direction rule:** Bargaining's third choice can set
-`com_serves_every_point`, which overrides the hardware behavior so the player never gets
-the receive advantage that scoring normally earns them. Everywhere else, the rule is
-absolute.
+**The rule is absolute — there is no longer an exception.** Bargaining's third choice used
+to offer `com_serves_every_point`, which forced every serve toward the player. It was cut at
+M14 for reading as a penalty rather than a bargain, and the axis went with it; a two-minute
+match clock took its place. Do not reintroduce a serve-direction override without a design
+decision on the wiki first.
 
 ### Collision
 
@@ -657,7 +683,7 @@ engine.** That rule is why there is still one engine.
 **Testing an act without playing to it.** Pause menu → `act` steps 1–5 with left/right.
 It is real navigation — it sets `gm.level_index`, **writes the checkpoint**, clears the band
 and loads the level — so it moves act, palette, dialogue and save state together, and it
-destroys real progress. `DEBUG_KEYS` gives `c` = player win and `v` = player loss, which is
+destroys real progress. `DEBUG_KEYS` gives `1` = player win and `2` = player loss, which is
 how the win/lose branches were verified, plus `[` / `]` to step `ball_scale` live.
 
 **Every character spent on act code is a character not spent on dialogue.**
@@ -700,6 +726,14 @@ how the win/lose branches were verified, plus `[` / `]` to step `ball_scale` liv
 - **`pal()` with no arguments resets all three palettes** — draw, display and secondary —
   wiping both the act palette at `0x5f10` and the scanline palette at `0x5f60`. Restore
   individual draw entries explicitly. The symptom is an act rendering green-on-black.
+- **A face button is three keys, and a debug key that shadows one is a live bug.** The
+  manual's default mapping is `[O]: Z C N` and `[X]: X V M`, plus the cursors. `DEBUG_KEYS`
+  read `c` = player win and `v` = player loss, so confirming a Bargaining choice with C both
+  committed the choice and won the act in the same frame — the labels stayed on screen while
+  the game left for Depression. It was latent from the day the debug keys went in and
+  unreachable until M14, because Denial and Anger never ask the player for a face button.
+  The keys are `1` and `2` now. **Any future keyboard hook must avoid Z X C V N M, the
+  cursors, and player 1's S F E D / LSHIFT / TAB W Q A.**
 - **`btnp()` auto-repeat** timing is tuned via `0x5f5c` (delay) and `0x5f5d` (interval).
   Needed for name entry.
 - **Do not use keyboard input** (`stat(30)`/`stat(31)`). It requires devkit mode,
@@ -792,8 +826,8 @@ Issues are where all work and all status live. The open ones:
 | | |
 |---|---|
 | **#35** | Refresh the class diagram — the last artefact still predating the M0–M11b object model |
-| **#54** | Strip debug scaffolding and dead code. Holds the **one ship-blocker** (`poke(0x5f2d, 1)`), and the reason the player's paddle config axes are currently dead |
-| **#55** | `com_serves_every_point` serves toward COM, not the player. Fix lands in #62 |
+| **#54** | Strip debug scaffolding and dead code. Holds the **one ship-blocker** (`poke(0x5f2d, 1)`). Partly done: M14 took `draw_debug`, `pong:create_prediction`, `level:input` and the per-wall debug fields because the token ceiling forced it. The player's paddle axes were never dead — that claim in the body is stale |
+| **#55** | Obsolete — the axis was fixed in #62 and then cut entirely at M14. Close it |
 | **#56** | Playtest tuning: dialogue timers, Depression's ball modes, COM's paddle, and **Anger's swarm cadence** — the count is settled at 40, the group size and gap are not |
 | **#57** | Console band colours inside an act are placeholder |
 | **#58** | Parking Lot — design ideas kept but not scheduled |

@@ -619,7 +619,6 @@ DEFAULT_CFG = {
  score_multiplier_com=1,
  initial_score_com=0,
  scoring_enabled=true,
- com_serves_every_point=false,
  time_limit=0,
  serve_random=false,
  serve_model="replica",
@@ -804,7 +803,6 @@ function pong:add_ball()
         dx = bspd(1) * coin_flip(),
         dy = bvz(8) * coin_flip()
     }
-    if (self.cfg.com_serves_every_point) b.dx = abs(b.dx)
     add(balls, b)
     return b
 end
@@ -898,7 +896,6 @@ function pong:begin_serve(b)
     b.serving = SERVE_DELAY
     b.hits = 0
     if (self.cfg.serve_random) b.dx = abs(b.dx) * coin_flip()
-    if (self.cfg.com_serves_every_point) b.dx = abs(b.dx)
 end
 
 function pong:update_serve(b)
@@ -1834,7 +1831,7 @@ B_ACC = 0.03
 B_SPD = 1
 B_TIME = 7200
 B_MULT = 3
-B_HEAD = 10
+B_HEAD = 5
 
 B_OPTS = {
 	{"longer paddle","slower com paddle"},
