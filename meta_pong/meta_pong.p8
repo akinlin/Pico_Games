@@ -540,8 +540,8 @@ function update_debug_keys()
     local k = stat(31)
     if (k == "") return
     if gm.state == game_manager.states.level and not nament.active then
-        if (k == "c") p.winner = 2
-        if (k == "v") p.winner = 1
+        if (k == "1") p.winner = 2
+        if (k == "2") p.winner = 1
     end
     if (k == "[") ball_scale = max(0.5, ball_scale - 0.1)
     if (k == "]") ball_scale = min(3, ball_scale + 0.1)
