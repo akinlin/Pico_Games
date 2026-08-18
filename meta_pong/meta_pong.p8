@@ -588,6 +588,8 @@ function draw_score()
     print("\^w\^t" .. hud.p1_score,hud.p1_x-(#tostr(hud.p1_score)*8),hud.p1_y,hud.p1_color)
     print("\^w\^t" .. hud.p2_score,hud.p2_x,hud.p2_y,hud.p2_color)
 
+    if (p.cfg.time_limit > 0) print(flr((p.cfg.time_limit-p.clock)/60),60,NICK_Y,C_SCORE)
+
     if hud.nick and gm.state == game_manager.states.level then
         print(COM_NAME,NICK_X1,NICK_Y,hud.p1_color)
         print(hud.nick,NICK_X2,NICK_Y,hud.p2_color)
@@ -601,6 +603,7 @@ AI_WHIFF_OFF = 10
 
 DEFAULT_CFG = {
  paddle_height={6,8},
+ paddle_dead={6,8},
  paddle_draw={6,6},
  paddle_pad={0,2},
  paddle_catch={0,3},
@@ -617,6 +620,7 @@ DEFAULT_CFG = {
  initial_score_com=0,
  scoring_enabled=true,
  com_serves_every_point=false,
+ time_limit=0,
  serve_random=false,
  serve_model="replica",
  ai_enabled=true,
@@ -672,6 +676,7 @@ end
 
 function pong:start_match()
     self.winner = 0
+    self.clock = 0
     self.pending = nil
     self:init_board()
     self:init_hud()
@@ -756,8 +761,9 @@ function pong:make_paddle(x,side)
         end
     end
     p.whiff = 0
-    p.miny = h
-    p.maxy = (PLAYFIELD_BOTTOM+1) - h - h
+    local d = self.cfg.paddle_dead[side]
+    p.miny = d
+    p.maxy = (PLAYFIELD_BOTTOM+1) - d - h
     p.visible = false
     add(walls, p)
     return p
@@ -831,6 +837,12 @@ end
 
 function pong:update_game_state()
     if (not self.attract) self:handle_game_input()
+
+    local tl = self.cfg.time_limit
+    if tl > 0 and self.winner == 0 then
+        self.clock += 1
+        if (self.clock >= tl) self.winner = hud.p2_score > hud.p1_score and 2 or 1
+    end
 
     for i=#balls,1,-1 do
         local b = balls[i]
@@ -1816,17 +1828,18 @@ end
 
 B_MID = 48
 B_YS = {28,64}
-B_PH = 12
-B_PD = 10
-B_ACC = 0.05
-B_SPD = 1.5
+B_PH = 16
+B_PD = 14
+B_ACC = 0.03
+B_SPD = 1
+B_TIME = 7200
 B_MULT = 3
 B_HEAD = 10
 
 B_OPTS = {
 	{"longer paddle","slower com paddle"},
 	{"com scores x3","com starts at 10"},
-	{"sudden death","com always serves"}
+	{"sudden death","2 minute limit"}
 }
 
 local barg = stage:new("bargaining")
@@ -1906,7 +1919,7 @@ function barg:apply(o)
 	elseif o == 1 then
 		g.sudden_death = true
 	else
-		g.com_serves_every_point = true
+		g.time_limit = B_TIME
 	end
 end
 
@@ -1943,7 +1956,7 @@ function barg:machine()
 end
 
 function barg:draw()
-	if (self.c < 1 or self.c > 3) return
+	if (self.c < 1 or self.c > 3 or not self.idle) return
 	local t = B_OPTS[self.c]
 	for i=1,2 do
 		local l,y = t[i],B_YS[i]
